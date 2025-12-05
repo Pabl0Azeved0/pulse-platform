@@ -1,0 +1,25 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=postgresql://pulse_user:pulse_password@db:5432/pulse_db
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=pulse_user
+      - POSTGRES_PASSWORD=pulse_password
+      - POSTGRES_DB=pulse_db
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:
