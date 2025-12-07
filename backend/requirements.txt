@@ -1,3 +1,11 @@
 fastapi==0.123.9
 uvicorn[standard]==0.38.0
 strawberry-graphql==0.287.2
+sqlalchemy==2.0.44
+asyncpg==0.31.0
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.5.0
+python-multipart==0.0.20
+python-dotenv==1.2.1
+psycopg2-binary==2.9.11
+bcrypt==3.2.2
