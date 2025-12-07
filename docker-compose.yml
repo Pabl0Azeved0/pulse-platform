@@ -5,8 +5,10 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgresql://pulse_user:pulse_password@db:5432/pulse_db
+      - DATABASE_URL=postgresql+asyncpg://pulse_user:pulse_password@db:5432/pulse_db
     depends_on:
       - db
 
