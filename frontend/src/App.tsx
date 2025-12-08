@@ -1,32 +1,21 @@
-import { useQuery, gql } from '@apollo/client';
-
-const HELLO_QUERY = gql`
-  query SayHello {
-    hello
-  }
-`;
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import Login from './Login';
+import Register from './Register';
+import Home from './Home';
 
 function App() {
-  const { loading, error, data } = useQuery(HELLO_QUERY);
-
-  if (loading) return <p>Loading Pulse...</p>;
-  if (error) return <p>Error: {error.message}</p>;
-
   return (
-    <div style={{ padding: '2rem', textAlign: 'center' }}>
-      <h1>Pulse Platform</h1>
-      <div style={{ 
-        border: '1px solid #ccc', 
-        padding: '20px', 
-        borderRadius: '8px', 
-        marginTop: '20px' 
-      }}>
-        <h3>Backend Status:</h3>
-        <p style={{ color: 'green', fontWeight: 'bold' }}>
-          {data.hello}
-        </p>
+    <Router>
+      <div className="min-h-screen bg-pulse-black text-white font-sans">
+        <Navbar />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+        </Routes>
       </div>
-    </div>
+    </Router>
   );
 }
 
