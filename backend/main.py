@@ -3,6 +3,7 @@ from strawberry.fastapi import GraphQLRouter
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.future import select
+from sqlalchemy.exc import IntegrityError
 from models import init_db, get_session, User
 from auth import get_password_hash, verify_password, create_access_token
 
@@ -31,13 +32,14 @@ class Mutation:
             hashed_pw = get_password_hash(password)
             new_user = User(username=username, email=email, password_hash=hashed_pw)
 
-            session.add(new_user)
-            await session.commit()
-            await session.refresh(new_user)
-
-            return UserType(
-                id=new_user.id, username=new_user.username, email=new_user.email
-            )
+            try:
+                session.add(new_user)
+                await session.commit()
+                await session.refresh(new_user)
+                return UserType(id=new_user.id, username=new_user.username, email=new_user.email)
+            except IntegrityError:
+                await session.rollback()
+                raise Exception("That username or email is already taken.")
 
     @strawberry.mutation
     async def login(self, username: str, password: str) -> AuthPayload:
