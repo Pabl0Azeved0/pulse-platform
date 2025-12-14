@@ -1,8 +1,9 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 
 // Define the shape of our User
 interface User {
   username: string;
+  avatar?: string;
 }
 
 interface AuthContextType {
