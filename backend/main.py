@@ -16,12 +16,15 @@ class UserType:
     id: int
     username: str
     email: str
+    avatar: str | None
+
 
 @strawberry.type
 class PostType:
     id: int
     content: str
     author: UserType
+
 
 @strawberry.type
 class AuthPayload:
@@ -41,7 +44,12 @@ class Mutation:
                 session.add(new_user)
                 await session.commit()
                 await session.refresh(new_user)
-                return UserType(id=new_user.id, username=new_user.username, email=new_user.email)
+                return UserType(
+                    id=new_user.id,
+                    username=new_user.username,
+                    email=new_user.email,
+                    avatar=None,
+                )
             except IntegrityError:
                 await session.rollback()
                 raise Exception("That username or email is already taken.")
@@ -56,8 +64,13 @@ class Mutation:
                 raise Exception("Invalid credentials")
             token = create_access_token({"sub": user.username})
             return AuthPayload(
-                access_token=token, 
-                user=UserType(id=user.id, username=user.username, email=user.email)
+                access_token=token,
+                user=UserType(
+                    id=user.id,
+                    username=user.username,
+                    email=user.email,
+                    avatar=user.avatar,
+                ),
             )
 
     @strawberry.mutation
@@ -76,14 +89,31 @@ class Mutation:
 
             # Convert to GraphQL Type
             post_response = PostType(
-                id=new_post.id, 
-                content=new_post.content, 
-                author=UserType(id=user.id, username=user.username, email=user.email)
+                id=new_post.id,
+                content=new_post.content,
+                author=UserType(id=user.id, username=user.username, email=user.email),
             )
 
             await broadcaster.publish(post_response)
 
             return post_response
+
+    @strawberry.mutation
+    async def update_avatar(self, username: str, avatar_data: str) -> UserType:
+        async for session in get_session():
+            query = select(User).where(User.username == username)
+            result = await session.execute(query)
+            user = result.scalars().first()
+
+            if not user:
+                raise Exception("User not found")
+
+            user.avatar = avatar_data
+            await session.commit()
+
+            return UserType(
+                id=user.id, username=user.username, email=user.email, avatar=user.avatar
+            )
 
 
 @strawberry.type
@@ -105,14 +135,21 @@ class Query:
             posts = result.scalars().all()
             response_posts = []
             for p in posts:
-                u_result = await session.execute(select(User).where(User.id == p.user_id))
+                u_result = await session.execute(
+                    select(User).where(User.id == p.user_id)
+                )
                 author = u_result.scalars().first()
-                response_posts.append(PostType(
-                    id=p.id, 
-                    content=p.content, 
-                    author=UserType(id=author.id, username=author.username, email=author.email)
-                ))
+                response_posts.append(
+                    PostType(
+                        id=p.id,
+                        content=p.content,
+                        author=UserType(
+                            id=author.id, username=author.username, email=author.email
+                        ),
+                    )
+                )
             return response_posts
+
 
 # --- APP SETUP ---
 schema = strawberry.Schema(query=Query, mutation=Mutation, subscription=Subscription)
@@ -129,6 +166,7 @@ app.add_middleware(
 )
 
 app.include_router(graphql_app, prefix="/graphql")
+
 
 @app.on_event("startup")
 async def on_startup():
