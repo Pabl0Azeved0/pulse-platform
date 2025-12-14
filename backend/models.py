@@ -5,11 +5,14 @@ import os
 
 # 1. Database Configuration
 # Using getenv ensures we pick up the Docker environment variable
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://pulse_user:pulse_password@db:5432/pulse_db")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql+asyncpg://pulse_user:pulse_password@db:5432/pulse_db"
+)
 
 engine = create_async_engine(DATABASE_URL, echo=True)
 async_session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 Base = declarative_base()
+
 
 # 2. The User Model
 class User(Base):
@@ -19,9 +22,11 @@ class User(Base):
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
     password_hash = Column(String)
+    avatar = Column(String, nullable=True)
 
     # Relationship to Posts
     posts = relationship("Post", back_populates="author")
+
 
 # 3. The Post Model
 class Post(Base):
@@ -34,11 +39,13 @@ class Post(Base):
     # Relationship to User
     author = relationship("User", back_populates="posts")
 
+
 # 4. Helper to init DB
 async def init_db():
     async with engine.begin() as conn:
         # This creates tables if they don't exist
         await conn.run_sync(Base.metadata.create_all)
+
 
 # 5. Dependency for Strawberry
 async def get_session():

@@ -1,6 +1,7 @@
 import asyncio
 from typing import List, Any
 
+
 class PulseBroadcaster:
     def __init__(self):
         # A list of active connections (queues)
@@ -22,6 +23,7 @@ class PulseBroadcaster:
         """Sends a message to all active queues"""
         for queue in self.subscribers:
             await queue.put(message)
+
 
 # Create a single global instance
 broadcaster = PulseBroadcaster()
