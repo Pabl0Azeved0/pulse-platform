@@ -1,14 +1,15 @@
 import strawberry
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
 from strawberry.fastapi import GraphQLRouter
-from typing import List, AsyncGenerator
+from typing import List, AsyncGenerator, Optional
 
 from auth import get_password_hash, verify_password, create_access_token
 from broadcaster import broadcaster
-from models import init_db, get_session, User, Post
+from models import init_db, get_session, User, Post, Like
 
 
 @strawberry.type
@@ -24,6 +25,8 @@ class PostType:
     id: int
     content: str
     author: UserType
+    likes_count: int
+    is_liked: bool
 
 
 @strawberry.type
@@ -76,9 +79,8 @@ class Mutation:
     @strawberry.mutation
     async def create_post(self, username: str, content: str) -> PostType:
         async for session in get_session():
-            query = select(User).where(User.username == username)
-            result = await session.execute(query)
-            user = result.scalars().first()
+            q = select(User).where(User.username == username)
+            user = (await session.execute(q)).scalars().first()
             if not user:
                 raise Exception("User not found")
 
@@ -87,15 +89,20 @@ class Mutation:
             await session.commit()
             await session.refresh(new_post)
 
-            # Convert to GraphQL Type
             post_response = PostType(
                 id=new_post.id,
                 content=new_post.content,
-                author=UserType(id=user.id, username=user.username, email=user.email),
+                likes_count=0,
+                is_liked=False,
+                author=UserType(
+                    id=user.id,
+                    username=user.username,
+                    email=user.email,
+                    avatar=user.avatar,
+                ),
             )
 
             await broadcaster.publish(post_response)
-
             return post_response
 
     @strawberry.mutation
@@ -115,6 +122,32 @@ class Mutation:
                 id=user.id, username=user.username, email=user.email, avatar=user.avatar
             )
 
+    @strawberry.mutation
+    async def like_post(self, username: str, post_id: int) -> int:
+        async for session in get_session():
+            q_user = select(User).where(User.username == username)
+            user = (await session.execute(q_user)).scalars().first()
+            if not user:
+                raise Exception("User not found")
+
+            q_like = select(Like).where(
+                Like.user_id == user.id, Like.post_id == post_id
+            )
+            result = await session.execute(q_like)
+            existing_like = result.scalars().first()
+
+            if existing_like:
+                await session.delete(existing_like)
+            else:
+                new_like = Like(user_id=user.id, post_id=post_id)
+                session.add(new_like)
+
+            await session.commit()
+
+            q_count = select(func.count(Like.id)).where(Like.post_id == post_id)
+            count = (await session.execute(q_count)).scalar()
+            return count or 0
+
 
 @strawberry.type
 class Subscription:
@@ -128,23 +161,51 @@ class Subscription:
 @strawberry.type
 class Query:
     @strawberry.field
-    async def posts(self) -> List[PostType]:
+    async def posts(self, viewer: Optional[str] = None) -> List[PostType]:
         async for session in get_session():
+            viewer_id = None
+            if viewer:
+                q_user = select(User).where(User.username == viewer)
+                u = (await session.execute(q_user)).scalars().first()
+                if u:
+                    viewer_id = u.id
+
             query = select(Post).order_by(Post.id.desc())
             result = await session.execute(query)
-            posts = result.scalars().all()
+            posts_list = result.scalars().all()
+
             response_posts = []
-            for p in posts:
+            for p in posts_list:
                 u_result = await session.execute(
                     select(User).where(User.id == p.user_id)
                 )
                 author = u_result.scalars().first()
+
+                l_result = await session.execute(
+                    select(func.count(Like.id)).where(Like.post_id == p.id)
+                )
+                count = l_result.scalar() or 0
+
+                user_liked = False
+                if viewer_id:
+                    q_check = select(Like).where(
+                        Like.user_id == viewer_id, Like.post_id == p.id
+                    )
+                    check = (await session.execute(q_check)).scalars().first()
+                    if check:
+                        user_liked = True
+
                 response_posts.append(
                     PostType(
                         id=p.id,
                         content=p.content,
+                        likes_count=count,
+                        is_liked=user_liked,
                         author=UserType(
-                            id=author.id, username=author.username, email=author.email
+                            id=author.id,
+                            username=author.username,
+                            email=author.email,
+                            avatar=author.avatar,
                         ),
                     )
                 )
