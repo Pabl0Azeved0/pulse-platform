@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint
-from sqlalchemy.orm import relationship, sessionmaker, declarative_base
+from sqlalchemy.orm import relationship, sessionmaker, declarative_base, backref
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 import os
 
@@ -23,6 +23,7 @@ class User(Base):
 
     # Relationship to Posts
     posts = relationship("Post", back_populates="author")
+    comments = relationship("Comment", back_populates="author")
 
 
 class Post(Base):
@@ -34,6 +35,7 @@ class Post(Base):
 
     # Relationship to User
     author = relationship("User", back_populates="posts")
+    comments = relationship("Comment", back_populates="post")
 
 
 class Like(Base):
@@ -43,6 +45,22 @@ class Like(Base):
     post_id = Column(Integer, ForeignKey("posts.id"))
 
     __table_args__ = (UniqueConstraint("user_id", "post_id", name="_user_post_uc"),)
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+    id = Column(Integer, primary_key=True, index=True)
+    content = Column(String)
+    created_at = Column(String) 
+    
+    user_id = Column(Integer, ForeignKey("users.id"))
+    post_id = Column(Integer, ForeignKey("posts.id"))
+    parent_id = Column(Integer, ForeignKey("comments.id"), nullable=True)
+    
+    author = relationship("User", lazy="selectin") 
+    post = relationship("Post")
+    
+    replies = relationship("Comment", backref=backref('parent', remote_side=[id]), lazy="selectin")
 
 
 async def init_db():
