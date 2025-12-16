@@ -1,11 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import { useAuth } from './context/AuthContext';
+import CommentThread from './components/CommentThread';
 
 // --- Type Definitions ---
 interface Author {
   username: string;
   avatar: string | null;
+}
+
+// FIX: Define the Comment type explicitly so TS doesn't use the DOM "Comment" type
+interface Comment {
+  id: number;
+  content: string;
+  author: Author;
+  replies: Comment[]; // Recursive definition
 }
 
 interface Post {
@@ -14,6 +23,7 @@ interface Post {
   author: Author;
   likesCount: number;
   isLiked: boolean;
+  comments: Comment[]; // Link it here
 }
 
 // Result of the GET_POSTS query
@@ -28,16 +38,34 @@ interface SubscriptionData {
 
 // --- GraphQL Definitions ---
 const GET_POSTS = gql`
-  query GetPosts {
-    posts {
+  query GetPosts($viewer: String) {
+    posts(viewer: $viewer) {
       id
       content
-      author {
-        username
-        avatar
-      }
       likesCount
       isLiked
+      author { username avatar }
+      comments {
+        id
+        content
+        likesCount
+        isLiked
+        author { username avatar }
+        replies {
+          id
+          content
+          likesCount
+          isLiked
+          author { username avatar }
+          replies {
+             id
+             content
+             likesCount
+             isLiked
+             author { username avatar }
+          }
+        }
+      }
     }
   }
 `;
@@ -47,12 +75,10 @@ const POST_SUBSCRIPTION = gql`
     newPost {
       id
       content
-      author {
-        username
-        avatar
-      }
       likesCount
       isLiked
+      author { username avatar }
+      # Note: New posts usually arrive with 0 comments, so we don't strictly need deep nesting here yet
     }
   }
 `;
@@ -63,11 +89,11 @@ const CREATE_POST = gql`
       id
       content
       likesCount
+      isLiked
       author {
         username
         avatar
       }
-      isLiked
     }
   }
 `;
@@ -82,7 +108,7 @@ export default function Feed() {
   const { user } = useAuth();
   const [content, setContent] = useState('');
 
-  // 1. Fetch Posts with Subscription Support
+  // 1. Fetch Posts
   const { data, loading, error, subscribeToMore } = useQuery<PostsData>(GET_POSTS, {
     variables: { viewer: user?.username }
   });
@@ -91,8 +117,6 @@ export default function Feed() {
   const [createPost, { loading: creating }] = useMutation(CREATE_POST);
   
   const [likePost] = useMutation(LIKE_MUTATION, {
-    // Portfolio-Grade Feature: Optimistic UI
-    // We don't wait for the server. We assume it worked and update the cache instantly.
     onError: (err) => console.error("Like failed", err) 
   });
 
@@ -104,12 +128,14 @@ export default function Feed() {
         if (!subscriptionData.data) return prev;
         const newPostItem = subscriptionData.data.newPost;
         
-        // Prevent duplicate posts if user created it themselves
-        if (prev.posts.some(p => p.id === newPostItem.id)) return prev;
+        // Ensure the new post has an empty comments array to match the Post type
+        const cleanPost = { ...newPostItem, comments: [] };
+
+        if (prev.posts.some(p => p.id === cleanPost.id)) return prev;
 
         return {
           ...prev,
-          posts: [newPostItem, ...prev.posts]
+          posts: [cleanPost, ...prev.posts]
         };
       }
     });
@@ -123,17 +149,7 @@ export default function Feed() {
     
     try {
       await createPost({
-        variables: { username: user.username, content },
-        // Manually update cache to show your own post instantly
-        // update: (cache, { data: { createPost } }) => {
-        //   const existing = cache.readQuery<PostsData>({ query: GET_POSTS });
-        //   if (existing) {
-        //     cache.writeQuery({
-        //       query: GET_POSTS,
-        //       data: { posts: [createPost, ...existing.posts] }
-        //     });
-        //   }
-        // }
+        variables: { username: user.username, content }
       });
       setContent('');
     } catch (err) {
@@ -144,22 +160,15 @@ export default function Feed() {
   const handleLike = (postId: number, currentLikes: number, currentlyLiked: boolean) => {
     if (!user) return;
 
-    // 1. Calculate the new state immediately (Optimistic Math)
     const isNowLiked = !currentlyLiked;
     const newCount = isNowLiked ? currentLikes + 1 : currentLikes - 1;
 
     likePost({
       variables: { username: user.username, postId },
-      
-      // 2. Fake the server response so it feels instant
-      optimisticResponse: {
-        likePost: newCount 
-      },
-
-      // 3. Manually update the Apollo Cache
+      optimisticResponse: { likePost: newCount },
       update: (cache, { data: { likePost: returnedCount } }) => {
         const cacheId = cache.identify({ __typename: 'PostType', id: postId });
-        if (!cacheId) return; // Safety check
+        if (!cacheId) return;
 
         cache.modify({
           id: cacheId,
@@ -223,9 +232,15 @@ export default function Feed() {
             </div>
 
             {/* Content */}
-            <p className="text-gray-300 leading-relaxed text-lg mb-6 whitespace-pre-wrap">
-              {post.content}
-            </p>
+            <div className="mb-6">
+              <p className="text-gray-300 leading-relaxed text-lg whitespace-pre-wrap">
+                {post.content}
+              </p>
+              
+              {/* --- COMMENTS SECTION --- */}
+              {/* Now TypeScript knows post.comments matches the expected type */}
+              <CommentThread comments={post.comments} postId={post.id} />
+            </div>
 
             {/* Footer: Interactions */}
             <div className="border-t border-white/5 pt-4 flex items-center gap-6">
@@ -235,7 +250,7 @@ export default function Feed() {
               >
                 <svg 
                   xmlns="http://www.w3.org/2000/svg" 
-                  className={`h-6 w-6 transition-transform group-hover:scale-125 ${post.likesCount > 0 ? 'fill-current text-red-500' : 'stroke-current'}`} 
+                  className={`h-6 w-6 transition-transform group-hover:scale-125 ${post.isLiked ? 'fill-current text-red-500' : 'stroke-current'}`} 
                   fill="none" 
                   viewBox="0 0 24 24" 
                   stroke="currentColor"
@@ -243,7 +258,7 @@ export default function Feed() {
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>
-                <span className="font-medium text-sm">
+                <span className={`font-medium text-sm ${post.isLiked ? 'text-red-500' : ''}`}>
                   {post.likesCount > 0 ? post.likesCount : 'Like'}
                 </span>
               </button>
