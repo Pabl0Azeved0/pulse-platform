@@ -42,7 +42,8 @@ class Like(Base):
     __tablename__ = "likes"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    post_id = Column(Integer, ForeignKey("posts.id"))
+    post_id = Column(Integer, ForeignKey("posts.id"), nullable=True)
+    comment_id = Column(Integer, ForeignKey("comments.id"), nullable=True)
 
     __table_args__ = (UniqueConstraint("user_id", "post_id", name="_user_post_uc"),)
 
@@ -51,16 +52,18 @@ class Comment(Base):
     __tablename__ = "comments"
     id = Column(Integer, primary_key=True, index=True)
     content = Column(String)
-    created_at = Column(String) 
-    
+    created_at = Column(String)
+
     user_id = Column(Integer, ForeignKey("users.id"))
     post_id = Column(Integer, ForeignKey("posts.id"))
     parent_id = Column(Integer, ForeignKey("comments.id"), nullable=True)
-    
-    author = relationship("User", lazy="selectin") 
+
+    author = relationship("User", lazy="selectin")
     post = relationship("Post")
-    
-    replies = relationship("Comment", backref=backref('parent', remote_side=[id]), lazy="selectin")
+
+    replies = relationship(
+        "Comment", backref=backref("parent", remote_side=[id]), lazy="selectin"
+    )
 
 
 async def init_db():
