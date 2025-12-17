@@ -6,16 +6,37 @@ from auth import get_password_hash
 
 # 5 Users, all password 'pulse'
 USERS_DATA = [
-    {"username": "alice", "email": "alice@pulse.com", "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=alice"},
-    {"username": "bob", "email": "bob@pulse.com", "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=bob"},
-    {"username": "charlie", "email": "charlie@pulse.com", "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=charlie"},
-    {"username": "dave", "email": "dave@pulse.com", "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=dave"},
-    {"username": "eve", "email": "eve@pulse.com", "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=eve"},
+    {
+        "username": "alice",
+        "email": "alice@pulse.com",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=alice",
+    },
+    {
+        "username": "bob",
+        "email": "bob@pulse.com",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=bob",
+    },
+    {
+        "username": "charlie",
+        "email": "charlie@pulse.com",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=charlie",
+    },
+    {
+        "username": "dave",
+        "email": "dave@pulse.com",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=dave",
+    },
+    {
+        "username": "eve",
+        "email": "eve@pulse.com",
+        "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=eve",
+    },
 ]
+
 
 async def populate():
     print("🌱 Starting Database Population...")
-    
+
     # 1. Ensure DB tables exist
     await init_db()
 
@@ -29,35 +50,50 @@ async def populate():
         print("👤 Creating Users...")
         # Pre-calculate hash since they all share the same password
         common_password_hash = get_password_hash("pulse")
-        
+
         users_map = {}
         for u_data in USERS_DATA:
             # Check if user exists to avoid duplicates
-            existing = (await session.execute(select(User).where(User.username == u_data["username"]))).scalars().first()
+            existing = (
+                (
+                    await session.execute(
+                        select(User).where(User.username == u_data["username"])
+                    )
+                )
+                .scalars()
+                .first()
+            )
             if not existing:
                 new_user = User(
                     username=u_data["username"],
                     email=u_data["email"],
                     password_hash=common_password_hash,
-                    avatar=u_data["avatar"]
+                    avatar=u_data["avatar"],
                 )
                 session.add(new_user)
                 users_map[u_data["username"]] = new_user
             else:
                 users_map[u_data["username"]] = existing
-        
+
         await session.commit()
         # Refresh to get IDs
-        for u in users_map.values(): await session.refresh(u)
+        for u in users_map.values():
+            await session.refresh(u)
 
         # --- Create Posts ---
         print("📝 Creating Posts...")
-        
+
         # Alice posts about Python
-        post1 = Post(content="Just deployed my first GraphQL API with Strawberry! 🍓 #python", user_id=users_map["alice"].id)
+        post1 = Post(
+            content="Just deployed my first GraphQL API with Strawberry! 🍓 #python",
+            user_id=users_map["alice"].id,
+        )
         # Dave posts about Coffee
-        post2 = Post(content="Coffee is just a parser for caffeine. ☕", user_id=users_map["dave"].id)
-        
+        post2 = Post(
+            content="Coffee is just a parser for caffeine. ☕",
+            user_id=users_map["dave"].id,
+        )
+
         session.add_all([post1, post2])
         await session.commit()
         await session.refresh(post1)
@@ -68,10 +104,10 @@ async def populate():
 
         # 1. Bob comments on Alice's post
         c1 = Comment(
-            content="Congrats Alice! Is it using Async?", 
-            user_id=users_map["bob"].id, 
-            post_id=post1.id, 
-            created_at=datetime.utcnow().isoformat()
+            content="Congrats Alice! Is it using Async?",
+            user_id=users_map["bob"].id,
+            post_id=post1.id,
+            created_at=datetime.utcnow().isoformat(),
         )
         session.add(c1)
         await session.commit()
@@ -79,11 +115,11 @@ async def populate():
 
         # 2. Charlie replies to Bob (Nested!)
         c2 = Comment(
-            content="Of course it is, check the repo.", 
-            user_id=users_map["charlie"].id, 
+            content="Of course it is, check the repo.",
+            user_id=users_map["charlie"].id,
             post_id=post1.id,
-            parent_id=c1.id, # <--- Link to Parent
-            created_at=datetime.utcnow().isoformat()
+            parent_id=c1.id,  # <--- Link to Parent
+            created_at=datetime.utcnow().isoformat(),
         )
         session.add(c2)
         await session.commit()
@@ -91,19 +127,19 @@ async def populate():
 
         # 3. Eve replies to Charlie (Double Nested!)
         c3 = Comment(
-            content="Can you share the link?", 
-            user_id=users_map["eve"].id, 
+            content="Can you share the link?",
+            user_id=users_map["eve"].id,
             post_id=post1.id,
-            parent_id=c2.id, # <--- Link to Parent
-            created_at=datetime.utcnow().isoformat()
+            parent_id=c2.id,  # <--- Link to Parent
+            created_at=datetime.utcnow().isoformat(),
         )
-        
+
         # 4. Eve comments on Dave's post (Top Level)
         c4 = Comment(
-            content="True story.", 
-            user_id=users_map["eve"].id, 
+            content="True story.",
+            user_id=users_map["eve"].id,
             post_id=post2.id,
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.utcnow().isoformat(),
         )
 
         session.add_all([c3, c4])
@@ -116,6 +152,7 @@ async def populate():
         await session.rollback()
     finally:
         await session.close()
+
 
 if __name__ == "__main__":
     asyncio.run(populate())
