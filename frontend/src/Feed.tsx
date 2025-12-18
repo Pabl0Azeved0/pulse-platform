@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import { useAuth } from './context/AuthContext';
 import CommentThread from './components/CommentThread';
+import CommentForm from './components/CommentForm';
 
 // --- Type Definitions ---
 interface Author {
@@ -9,12 +10,13 @@ interface Author {
   avatar: string | null;
 }
 
-// FIX: Define the Comment type explicitly so TS doesn't use the DOM "Comment" type
 interface Comment {
   id: number;
   content: string;
   author: Author;
-  replies: Comment[]; // Recursive definition
+  likesCount: number;
+  isLiked: boolean;
+  replies: Comment[];
 }
 
 interface Post {
@@ -23,15 +25,13 @@ interface Post {
   author: Author;
   likesCount: number;
   isLiked: boolean;
-  comments: Comment[]; // Link it here
+  comments: Comment[];
 }
 
-// Result of the GET_POSTS query
 interface PostsData {
   posts: Post[];
 }
 
-// Result of the POST_SUBSCRIPTION
 interface SubscriptionData {
   newPost: Post;
 }
@@ -78,7 +78,6 @@ const POST_SUBSCRIPTION = gql`
       likesCount
       isLiked
       author { username avatar }
-      # Note: New posts usually arrive with 0 comments, so we don't strictly need deep nesting here yet
     }
   }
 `;
@@ -107,20 +106,18 @@ const LIKE_MUTATION = gql`
 export default function Feed() {
   const { user } = useAuth();
   const [content, setContent] = useState('');
+  const [activeCommentBox, setActiveCommentBox] = useState<number | null>(null);
 
-  // 1. Fetch Posts
   const { data, loading, error, subscribeToMore } = useQuery<PostsData>(GET_POSTS, {
     variables: { viewer: user?.username }
   });
 
-  // 2. Setup Mutations
   const [createPost, { loading: creating }] = useMutation(CREATE_POST);
   
   const [likePost] = useMutation(LIKE_MUTATION, {
     onError: (err) => console.error("Like failed", err) 
   });
 
-  // 3. Subscription Listener
   useEffect(() => {
     const unsubscribe = subscribeToMore<SubscriptionData>({
       document: POST_SUBSCRIPTION,
@@ -128,8 +125,10 @@ export default function Feed() {
         if (!subscriptionData.data) return prev;
         const newPostItem = subscriptionData.data.newPost;
         
-        // Ensure the new post has an empty comments array to match the Post type
-        const cleanPost = { ...newPostItem, comments: [] };
+        const cleanPost: Post = { 
+            ...newPostItem, 
+            comments: [] 
+        };
 
         if (prev.posts.some(p => p.id === cleanPost.id)) return prev;
 
@@ -142,7 +141,6 @@ export default function Feed() {
     return () => unsubscribe();
   }, [subscribeToMore]);
 
-  // 4. Handlers
   const handlePost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim() || !user) return;
@@ -181,14 +179,12 @@ export default function Feed() {
     });
   };
 
-  // --- Render ---
   if (loading && !data) return <div className="text-center mt-20 text-pulse-blue animate-pulse">Loading Pulse...</div>;
   if (error) return <div className="text-center mt-20 text-red-500 bg-red-900/10 p-4 rounded">System Offline: {error.message}</div>;
 
   return (
     <div className="pt-24 pb-20 max-w-2xl mx-auto px-4">
       
-      {/* Create Post Box */}
       <div className="bg-pulse-dark border border-white/10 rounded-xl p-6 mb-8 shadow-2xl backdrop-blur-sm">
         <h3 className="text-lg font-bold mb-4 text-gray-300">Broadcast your Signal</h3>
         <form onSubmit={handlePost}>
@@ -211,12 +207,10 @@ export default function Feed() {
         </form>
       </div>
 
-      {/* Feed List */}
       <div className="space-y-6">
         {data?.posts.map((post) => (
           <div key={post.id} className="bg-pulse-dark p-6 rounded-xl border border-white/5 hover:border-white/10 transition-colors shadow-lg">
             
-            {/* Header: Avatar + User */}
             <div className="flex items-center gap-4 mb-4">
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-800 to-black flex items-center justify-center text-white font-bold border border-white/10 overflow-hidden">
                 {post.author.avatar ? (
@@ -231,38 +225,46 @@ export default function Feed() {
               </div>
             </div>
 
-            {/* Content */}
             <div className="mb-6">
               <p className="text-gray-300 leading-relaxed text-lg whitespace-pre-wrap">
                 {post.content}
               </p>
-              
-              {/* --- COMMENTS SECTION --- */}
-              {/* Now TypeScript knows post.comments matches the expected type */}
-              <CommentThread comments={post.comments} postId={post.id} />
             </div>
 
-            {/* Footer: Interactions */}
             <div className="border-t border-white/5 pt-4 flex items-center gap-6">
+              
               <button 
                 onClick={() => handleLike(post.id, post.likesCount, post.isLiked)}
-                className="flex items-center gap-2 text-gray-400 hover:text-red-500 transition-colors group"
+                className={`flex items-center gap-2 font-bold transition-colors ${post.isLiked ? 'text-red-500' : 'text-gray-400 hover:text-gray-200'}`}
               >
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  className={`h-6 w-6 transition-transform group-hover:scale-125 ${post.isLiked ? 'fill-current text-red-500' : 'stroke-current'}`} 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-                <span className={`font-medium text-sm ${post.isLiked ? 'text-red-500' : ''}`}>
-                  {post.likesCount > 0 ? post.likesCount : 'Like'}
-                </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
+                  </svg>
+                  <span>{post.likesCount > 0 ? post.likesCount : 'Like'}</span>
+              </button>
+
+              <button 
+                  onClick={() => setActiveCommentBox(activeCommentBox === post.id ? null : post.id)}
+                  className="flex items-center gap-2 text-gray-400 hover:text-pulse-blue transition-colors font-bold"
+              >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z" clipRule="evenodd" />
+                  </svg>
+                  <span>Comment</span>
               </button>
             </div>
+
+            {activeCommentBox === post.id && (
+                <div className="mt-4 p-4 bg-black/20 rounded-lg animate-fade-in">
+                    <CommentForm 
+                        postId={post.id} 
+                        onSuccess={() => setActiveCommentBox(null)} 
+                        onCancel={() => setActiveCommentBox(null)}
+                    />
+                </div>
+            )}
+            
+            <CommentThread comments={post.comments} postId={post.id} />
 
           </div>
         ))}
