@@ -1,7 +1,8 @@
+import os
+from datetime import datetime
 from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship, sessionmaker, declarative_base, backref
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-import os
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql+asyncpg://pulse_user:pulse_password@db:5432/pulse_db"
@@ -20,6 +21,8 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     password_hash = Column(String)
     avatar = Column(String, nullable=True)
+    bio = Column(String, nullable=True)
+    created_at = Column(String, default=lambda: datetime.utcnow().isoformat())
 
     # Relationship to Posts
     posts = relationship("Post", back_populates="author")
