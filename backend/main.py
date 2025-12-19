@@ -1,7 +1,8 @@
-import strawberry
+import strawberry, shutil, os, uuid
 from datetime import datetime
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
@@ -412,9 +413,12 @@ class Query:
             )
 
 
+
 # --- APP SETUP ---
 schema = strawberry.Schema(query=Query, mutation=Mutation, subscription=Subscription)
 graphql_app = GraphQLRouter(schema)
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI()
 app.add_middleware(
@@ -424,7 +428,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    file_extension = file.filename.split(".")[-1]
+    unique_filename = f"{uuid.uuid4()}.{file_extension}"
+    file_path = os.path.join(UPLOAD_DIR, unique_filename)
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    return {"url": f"http://localhost:8000/uploads/{unique_filename}"}
+
 app.include_router(graphql_app, prefix="/graphql")
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
 @app.on_event("startup")
