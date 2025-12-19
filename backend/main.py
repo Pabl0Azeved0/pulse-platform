@@ -44,6 +44,18 @@ class PostType:
 
 
 @strawberry.type
+class UserProfileType:
+    id: int
+    username: str
+    email: str
+    avatar: str | None
+    bio: str | None
+    created_at: str
+    posts_count: int
+    posts: List[PostType]
+
+
+@strawberry.type
 class AuthPayload:
     access_token: str
     token_type: str = "bearer"
@@ -328,6 +340,76 @@ class Query:
                     )
                 )
             return response_posts
+
+    @strawberry.field
+    async def profile(
+        self, username: str, viewer: Optional[str] = None
+    ) -> Optional[UserProfileType]:
+        async for session in get_session():
+            q_user = select(User).where(User.username == username)
+            user = (await session.execute(q_user)).scalars().first()
+            if not user:
+                return None
+
+            viewer_id = None
+            if viewer:
+                v_u = (
+                    (await session.execute(select(User).where(User.username == viewer)))
+                    .scalars()
+                    .first()
+                )
+                if v_u:
+                    viewer_id = v_u.id
+
+            p_query = (
+                select(Post).where(Post.user_id == user.id).order_by(Post.id.desc())
+            )
+            posts_db = (await session.execute(p_query)).scalars().all()
+
+            formatted_posts = []
+            for p in posts_db:
+                count = (
+                    await session.execute(
+                        select(func.count(Like.id)).where(Like.post_id == p.id)
+                    )
+                ).scalar() or 0
+                user_liked = False
+                if viewer_id:
+                    check = (
+                        (
+                            await session.execute(
+                                select(Like).where(
+                                    Like.user_id == viewer_id, Like.post_id == p.id
+                                )
+                            )
+                        )
+                        .scalars()
+                        .first()
+                    )
+                    if check:
+                        user_liked = True
+
+                formatted_posts.append(
+                    PostType(
+                        id=p.id,
+                        content=p.content,
+                        likes_count=count,
+                        is_liked=user_liked,
+                        author=format_user(user),
+                        comments=[],
+                    )
+                )
+
+            return UserProfileType(
+                id=user.id,
+                username=user.username,
+                email=user.email,
+                avatar=user.avatar,
+                bio=user.bio,
+                created_at=user.created_at or datetime.utcnow().isoformat(),
+                posts_count=len(formatted_posts),
+                posts=formatted_posts,
+            )
 
 
 # --- APP SETUP ---
