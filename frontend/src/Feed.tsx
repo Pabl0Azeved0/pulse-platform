@@ -3,6 +3,7 @@ import { useQuery, useMutation, gql } from '@apollo/client';
 import { useAuth } from './context/AuthContext';
 import CommentThread from './components/CommentThread';
 import CommentForm from './components/CommentForm';
+import { Link } from 'react-router-dom';
 
 // --- Type Definitions ---
 interface Author {
@@ -209,64 +210,64 @@ export default function Feed() {
 
       <div className="space-y-6">
         {data?.posts.map((post) => (
-          <div key={post.id} className="bg-pulse-dark p-6 rounded-xl border border-white/5 hover:border-white/10 transition-colors shadow-lg">
-            
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-800 to-black flex items-center justify-center text-white font-bold border border-white/10 overflow-hidden">
-                {post.author.avatar ? (
-                  <img src={post.author.avatar} alt={post.author.username} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-lg">{post.author.username.substring(0, 2).toUpperCase()}</span>
-                )}
+          <>
+          <Link to={`/u/${post.author.username}`} className="flex items-center gap-4 mb-4 group">
+            <div key={post.id} className="bg-pulse-dark p-6 rounded-xl border border-white/5 hover:border-white/10 transition-colors shadow-lg">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-800 to-black flex items-center justify-center text-white font-bold border border-white/10 overflow-hidden">
+                  {post.author.avatar ? (
+                    <img src={post.author.avatar} alt={post.author.username} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-lg">{post.author.username.substring(0, 2).toUpperCase()}</span>
+                  )}
+                </div>
+                <div>
+                  <span className="font-bold text-white text-lg block">{post.author.username}</span>
+                  <span className="text-xs text-gray-500">Pulse Node ID: #{post.id}</span>
+                </div>
               </div>
-              <div>
-                <span className="font-bold text-white text-lg block">{post.author.username}</span>
-                <span className="text-xs text-gray-500">Pulse Node ID: #{post.id}</span>
+
+              <div className="mb-6">
+                <p className="text-gray-300 leading-relaxed text-lg whitespace-pre-wrap">
+                  {post.content}
+                </p>
               </div>
-            </div>
 
-            <div className="mb-6">
-              <p className="text-gray-300 leading-relaxed text-lg whitespace-pre-wrap">
-                {post.content}
-              </p>
-            </div>
+              <div className="border-t border-white/5 pt-4 flex items-center gap-6">
 
-            <div className="border-t border-white/5 pt-4 flex items-center gap-6">
-              
-              <button 
-                onClick={() => handleLike(post.id, post.likesCount, post.isLiked)}
-                className={`flex items-center gap-2 font-bold transition-colors ${post.isLiked ? 'text-red-500' : 'text-gray-400 hover:text-gray-200'}`}
-              >
+                <button
+                  onClick={() => handleLike(post.id, post.likesCount, post.isLiked)}
+                  className={`flex items-center gap-2 font-bold transition-colors ${post.isLiked ? 'text-red-500' : 'text-gray-400 hover:text-gray-200'}`}
+                >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
                   </svg>
                   <span>{post.likesCount > 0 ? post.likesCount : 'Like'}</span>
-              </button>
+                </button>
 
-              <button 
+                <button
                   onClick={() => setActiveCommentBox(activeCommentBox === post.id ? null : post.id)}
                   className="flex items-center gap-2 text-gray-400 hover:text-pulse-blue transition-colors font-bold"
-              >
+                >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z" clipRule="evenodd" />
                   </svg>
                   <span>Comment</span>
-              </button>
-            </div>
+                </button>
+              </div>
 
-            {activeCommentBox === post.id && (
+              {activeCommentBox === post.id && (
                 <div className="mt-4 p-4 bg-black/20 rounded-lg animate-fade-in">
-                    <CommentForm 
-                        postId={post.id} 
-                        onSuccess={() => setActiveCommentBox(null)} 
-                        onCancel={() => setActiveCommentBox(null)}
-                    />
+                  <CommentForm
+                    postId={post.id}
+                    onSuccess={() => setActiveCommentBox(null)}
+                    onCancel={() => setActiveCommentBox(null)} />
                 </div>
-            )}
-            
-            <CommentThread comments={post.comments} postId={post.id} />
-
-          </div>
+              )}
+              <CommentThread comments={post.comments} postId={post.id} />
+            </div>
+          </Link>
+          </>
         ))}
         
         {data?.posts.length === 0 && (
