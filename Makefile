@@ -14,3 +14,6 @@ restart-db:
 
 populate-db:
 	docker compose exec backend python populate_db.py
+
+format:
+	black backend/*.py
