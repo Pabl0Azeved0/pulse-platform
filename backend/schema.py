@@ -52,6 +52,9 @@ class UserProfileType:
     bio: str | None
     created_at: str
     posts_count: int
+    followers_count: int
+    following_count: int
+    is_following: bool
     posts: List[PostType]
 
 
@@ -60,6 +63,12 @@ class AuthPayload:
     access_token: str
     token_type: str = "bearer"
     user: UserType
+
+
+@strawberry.type
+class SearchResults:
+    users: List[UserType]
+    posts: List[PostType]
 
 
 # --- HELPERS ---
@@ -217,6 +226,89 @@ class Mutation:
             await session.commit()
             return format_user(user)
 
+    @strawberry.mutation
+    async def update_profile(self, username: str, bio: str) -> UserType:
+        async for session in get_session():
+            query = select(User).where(User.username == username)
+            user = (await session.execute(query)).scalars().first()
+
+            if not user:
+                raise Exception("User not found")
+
+            user.bio = bio
+
+            await session.commit()
+            return format_user(user)
+
+    @strawberry.mutation
+    async def follow_user(self, username: str) -> bool:
+        async for session in get_session():
+            # 1. Get Viewer
+            # (In a real app, you'd get the current user from context/token.
+            # For this MVP we pass 'viewer' as an arg, OR strictly speaking,
+            # we should get the current user from the request context.
+            # To keep it consistent with your current code, let's assume we pass the viewer's username as an argument?
+            # WAIT: Your current auth flow extracts user from token in 'login', but for mutations we usually need context.
+            # Let's add a 'follower_username' argument to be explicit, matching your style).
+            pass
+
+    # Let's actually implement it matching your pattern (passing username explicitly)
+    @strawberry.mutation
+    async def follow_user(self, follower_username: str, target_username: str) -> bool:
+        async for session in get_session():
+            # Get Follower
+            q_follower = select(User).where(User.username == follower_username)
+            follower = (await session.execute(q_follower)).scalars().first()
+
+            # Get Target
+            q_target = select(User).where(User.username == target_username)
+            target = (await session.execute(q_target)).scalars().first()
+
+            if not follower or not target:
+                raise Exception("User not found")
+            if follower.id == target.id:
+                raise Exception("Cannot follow yourself")
+
+            # Check existence
+            q_check = select(Follow).where(
+                Follow.follower_id == follower.id, Follow.followed_id == target.id
+            )
+            existing = (await session.execute(q_check)).scalars().first()
+
+            if not existing:
+                new_follow = Follow(
+                    follower_id=follower.id,
+                    followed_id=target.id,
+                    created_at=datetime.utcnow().isoformat(),
+                )
+                session.add(new_follow)
+                await session.commit()
+                return True
+            return False
+
+    @strawberry.mutation
+    async def unfollow_user(self, follower_username: str, target_username: str) -> bool:
+        async for session in get_session():
+            q_follower = select(User).where(User.username == follower_username)
+            follower = (await session.execute(q_follower)).scalars().first()
+
+            q_target = select(User).where(User.username == target_username)
+            target = (await session.execute(q_target)).scalars().first()
+
+            if not follower or not target:
+                raise Exception("User not found")
+
+            q_check = select(Follow).where(
+                Follow.follower_id == follower.id, Follow.followed_id == target.id
+            )
+            existing = (await session.execute(q_check)).scalars().first()
+
+            if existing:
+                await session.delete(existing)
+                await session.commit()
+                return True
+            return False
+
 
 @strawberry.type
 class Query:
@@ -341,6 +433,31 @@ class Query:
                 if v_u:
                     viewer_id = v_u.id
 
+            # --- STATS LOGIC ---
+            # 1. Followers Count
+            q_followers = select(func.count(Follow.id)).where(
+                Follow.followed_id == user.id
+            )
+            followers_count = (await session.execute(q_followers)).scalar() or 0
+
+            # 2. Following Count
+            q_following = select(func.count(Follow.id)).where(
+                Follow.follower_id == user.id
+            )
+            following_count = (await session.execute(q_following)).scalar() or 0
+
+            # 3. Is Viewer Following?
+            is_following = False
+            if viewer_id:
+                q_check = select(Follow).where(
+                    Follow.follower_id == viewer_id, Follow.followed_id == user.id
+                )
+                check = (await session.execute(q_check)).scalars().first()
+                if check:
+                    is_following = True
+            # -------------------
+
+            # Get Posts (Existing Logic)
             p_query = (
                 select(Post).where(Post.user_id == user.id).order_by(Post.id.desc())
             )
@@ -348,6 +465,8 @@ class Query:
 
             formatted_posts = []
             for p in posts_db:
+                # ... (Keep existing post formatting logic) ...
+                # Copy the logic from your current schema.py for calculating likes etc
                 count = (
                     await session.execute(
                         select(func.count(Like.id)).where(Like.post_id == p.id)
@@ -388,8 +507,84 @@ class Query:
                 bio=user.bio,
                 created_at=user.created_at or datetime.utcnow().isoformat(),
                 posts_count=len(formatted_posts),
+                # Populate new fields
+                followers_count=followers_count,
+                following_count=following_count,
+                is_following=is_following,
                 posts=formatted_posts,
             )
+
+    @strawberry.field
+    async def search(self, query: str, viewer: Optional[str] = None) -> SearchResults:
+        async for session in get_session():
+            if not query or len(query.strip()) < 2:
+                return SearchResults(users=[], posts=[])
+
+            clean_query = f"%{query}%"
+
+            u_query = select(User).where(User.username.ilike(clean_query)).limit(10)
+            users_db = (await session.execute(u_query)).scalars().all()
+            formatted_users = [format_user(u) for u in users_db]
+
+            p_query = (
+                select(Post)
+                .where(Post.content.ilike(clean_query))
+                .order_by(Post.id.desc())
+                .limit(20)
+            )
+            posts_db = (await session.execute(p_query)).scalars().all()
+
+            viewer_id = None
+            if viewer:
+                v = (
+                    (await session.execute(select(User).where(User.username == viewer)))
+                    .scalars()
+                    .first()
+                )
+                if v:
+                    viewer_id = v.id
+
+            formatted_posts = []
+            for p in posts_db:
+                author = (
+                    (await session.execute(select(User).where(User.id == p.user_id)))
+                    .scalars()
+                    .first()
+                )
+
+                count = (
+                    await session.execute(
+                        select(func.count(Like.id)).where(Like.post_id == p.id)
+                    )
+                ).scalar() or 0
+                user_liked = False
+                if viewer_id:
+                    check = (
+                        (
+                            await session.execute(
+                                select(Like).where(
+                                    Like.user_id == viewer_id, Like.post_id == p.id
+                                )
+                            )
+                        )
+                        .scalars()
+                        .first()
+                    )
+                    if check:
+                        user_liked = True
+
+                formatted_posts.append(
+                    PostType(
+                        id=p.id,
+                        content=p.content,
+                        likes_count=count,
+                        is_liked=user_liked,
+                        author=format_user(author),
+                        comments=[],
+                    )
+                )
+
+            return SearchResults(users=formatted_users, posts=formatted_posts)
 
 
 # --- SUBSCRIPTION ---
