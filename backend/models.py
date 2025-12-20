@@ -69,6 +69,18 @@ class Comment(Base):
     )
 
 
+class Follow(Base):
+    __tablename__ = "follows"
+    id = Column(Integer, primary_key=True, index=True)
+    follower_id = Column(Integer, ForeignKey("users.id"))
+    followed_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(String)
+
+    __table_args__ = (
+        UniqueConstraint("follower_id", "followed_id", name="_follower_followed_uc"),
+    )
+
+
 async def init_db():
     async with engine.begin() as conn:
         # This creates tables if they don't exist
