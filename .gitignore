@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 venv/
 .env
+backend/uploads/
 
 # Node/Next.js (Pre-emptive)
 node_modules/
