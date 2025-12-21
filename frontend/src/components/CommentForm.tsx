@@ -9,7 +9,10 @@ const CREATE_COMMENT = gql`
       content
       likesCount
       isLiked
-      author { username avatar }
+      author {
+        username
+        avatar
+      }
       replies {
         id
       }
@@ -19,7 +22,7 @@ const CREATE_COMMENT = gql`
 
 interface CommentFormProps {
   postId: number;
-  parentId?: number; 
+  parentId?: number;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -30,21 +33,23 @@ export default function CommentForm({ postId, parentId, onSuccess, onCancel }: C
 
   const [createComment, { loading }] = useMutation(CREATE_COMMENT, {
     // FIX 1: Add Optimistic Response for instant "fake" update
-    optimisticResponse: user ? {
-        createComment: {
-            __typename: "CommentType",
+    optimisticResponse: user
+      ? {
+          createComment: {
+            __typename: 'CommentType',
             id: -Math.round(Math.random() * 1000000), // Temporary ID
             content: content,
             likesCount: 0,
             isLiked: false,
             author: {
-                __typename: "UserType",
-                username: user.username,
-                avatar: null // Or user.avatar if you have it in context
+              __typename: 'UserType',
+              username: user.username,
+              avatar: null, // Or user.avatar if you have it in context
             },
-            replies: []
+            replies: [],
+          },
         }
-    } : undefined,
+      : undefined,
 
     // FIX 2: Robust Cache Update
     update(cache, { data: { createComment } }) {
@@ -53,7 +58,7 @@ export default function CommentForm({ postId, parentId, onSuccess, onCancel }: C
       if (parentId) {
         // SCENARIO A: Reply -> Add to Parent Comment
         const parentCacheId = cache.identify({ __typename: 'CommentType', id: parentId });
-        
+
         if (parentCacheId) {
           cache.modify({
             id: parentCacheId,
@@ -61,7 +66,7 @@ export default function CommentForm({ postId, parentId, onSuccess, onCancel }: C
               // SAFEGUARD: Handle null/undefined existing replies
               replies(existingReplies) {
                 const current = existingReplies || [];
-                
+
                 const newReplyRef = cache.writeFragment({
                   data: createComment,
                   fragment: gql`
@@ -70,20 +75,25 @@ export default function CommentForm({ postId, parentId, onSuccess, onCancel }: C
                       content
                       likesCount
                       isLiked
-                      author { username avatar }
-                      replies { id }
+                      author {
+                        username
+                        avatar
+                      }
+                      replies {
+                        id
+                      }
                     }
-                  `
+                  `,
                 });
                 return [...current, newReplyRef];
-              }
-            }
+              },
+            },
           });
         }
       } else {
         // SCENARIO B: Root Comment -> Add to Post
         const postCacheId = cache.identify({ __typename: 'PostType', id: postId });
-        
+
         if (postCacheId) {
           cache.modify({
             id: postCacheId,
@@ -100,18 +110,23 @@ export default function CommentForm({ postId, parentId, onSuccess, onCancel }: C
                       content
                       likesCount
                       isLiked
-                      author { username avatar }
-                      replies { id }
+                      author {
+                        username
+                        avatar
+                      }
+                      replies {
+                        id
+                      }
                     }
-                  `
+                  `,
                 });
                 return [...current, newCommentRef];
-              }
-            }
+              },
+            },
           });
         }
       }
-    }
+    },
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -120,17 +135,17 @@ export default function CommentForm({ postId, parentId, onSuccess, onCancel }: C
 
     try {
       await createComment({
-        variables: { 
-          username: user.username, 
-          postId, 
-          content, 
-          parentId: parentId || null 
-        }
+        variables: {
+          username: user.username,
+          postId,
+          content,
+          parentId: parentId || null,
+        },
       });
       setContent('');
       if (onSuccess) onSuccess();
     } catch (err) {
-      console.error("Failed to post comment:", err);
+      console.error('Failed to post comment:', err);
     }
   };
 
@@ -148,7 +163,7 @@ export default function CommentForm({ postId, parentId, onSuccess, onCancel }: C
         onKeyDown={handleKeyDown}
         onChange={(e) => setContent(e.target.value)}
         className="w-full bg-black/30 border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-pulse-blue outline-none resize-none transition-all placeholder-gray-500"
-        placeholder={parentId ? "Write a reply..." : "Write a comment..."}
+        placeholder={parentId ? 'Write a reply...' : 'Write a comment...'}
         rows={2}
       />
       <div className="flex justify-end gap-2">
