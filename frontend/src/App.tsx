@@ -6,10 +6,11 @@ import Home from './Home';
 import { AuthProvider } from './context/AuthContext';
 import Settings from './Settings';
 import Profile from './Profile';
+import Search from './Search';
 
 function App() {
   return (
-    <AuthProvider> 
+    <AuthProvider>
       <Router>
         <div className="min-h-screen bg-pulse-black text-white font-sans">
           <Navbar />
@@ -19,6 +20,7 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/u/:username" element={<Profile />} />
+            <Route path="/search" element={<Search />} />
           </Routes>
         </div>
       </Router>
