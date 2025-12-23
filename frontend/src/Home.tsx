@@ -19,11 +19,17 @@ export default function Home() {
           <PulseWave />
         </div>
         <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
-          Feel the <span className="text-transparent bg-clip-text bg-gradient-to-r from-pulse-blue to-pulse-green">Pulse</span>
+          Feel the{' '}
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-pulse-blue to-pulse-green">
+            Pulse
+          </span>
         </h1>
         {/* ... rest of the landing page ... */}
-         <div className="flex justify-center gap-4">
-          <a href="/register" className="px-8 py-3 bg-white text-black font-bold rounded-full hover:bg-gray-200 transition">
+        <div className="flex justify-center gap-4">
+          <a
+            href="/register"
+            className="px-8 py-3 bg-white text-black font-bold rounded-full hover:bg-gray-200 transition"
+          >
             Get Started
           </a>
         </div>
