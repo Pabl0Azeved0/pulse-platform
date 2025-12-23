@@ -22,12 +22,12 @@ export default function Login() {
     e.preventDefault();
     try {
       const response = await loginMutation({ variables: { username, password } });
-      
+
       if (response.data?.login?.accessToken) {
         const token = response.data.login.accessToken;
-        login(token, username); 
-        
-        navigate('/'); 
+        login(token, username);
+
+        navigate('/');
       }
     } catch (err) {
       console.error(err);
@@ -37,7 +37,6 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center pt-16">
       <div className="w-full max-w-md bg-pulse-dark p-8 rounded-2xl shadow-2xl border border-white/5">
-        
         <h2 className="text-3xl font-bold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r from-pulse-blue to-pulse-green">
           Welcome Back
         </h2>
@@ -45,8 +44,8 @@ export default function Login() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">Username</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-pulse-blue focus:ring-1 focus:ring-pulse-blue transition-colors"
@@ -56,8 +55,8 @@ export default function Login() {
 
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">Password</label>
-            <input 
-              type="password" 
+            <input
+              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-pulse-green focus:ring-1 focus:ring-pulse-green transition-colors"
@@ -65,8 +64,8 @@ export default function Login() {
             />
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
             className="w-full bg-gradient-to-r from-pulse-blue to-pulse-green text-black font-bold py-3 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
           >
