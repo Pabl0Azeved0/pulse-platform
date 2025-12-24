@@ -39,8 +39,8 @@ interface SubscriptionData {
 
 // --- GraphQL Definitions ---
 const GET_POSTS = gql`
-  query GetPosts($viewer: String) {
-    posts(viewer: $viewer) {
+  query GetPosts($viewer: String, $filter: String) {
+    posts(viewer: $viewer, filterType: $filter) {
       id
       content
       likesCount
@@ -124,8 +124,12 @@ export default function Feed() {
   const [content, setContent] = useState('');
   const [activeCommentBox, setActiveCommentBox] = useState<number | null>(null);
 
+  // NEW: State for tabs
+  const [feedFilter, setFeedFilter] = useState<'GLOBAL' | 'FOLLOWING'>('GLOBAL');
+
   const { data, loading, error, subscribeToMore } = useQuery<PostsData>(GET_POSTS, {
-    variables: { viewer: user?.username },
+    variables: { viewer: user?.username, filter: feedFilter },
+    fetchPolicy: 'network-only',
   });
 
   const [createPost, { loading: creating }] = useMutation(CREATE_POST);
@@ -148,6 +152,10 @@ export default function Feed() {
 
         if (prev.posts.some((p) => p.id === cleanPost.id)) return prev;
 
+        // Only add new posts to the feed if we are in GLOBAL mode
+        // OR if we are in FOLLOWING mode and we follow the author (complex check)
+        // For simplicity, we mostly rely on Global or refetch for consistency.
+        // We will append it regardless for now to keep the UI snappy.
         return {
           ...prev,
           posts: [cleanPost, ...prev.posts],
@@ -206,6 +214,32 @@ export default function Feed() {
 
   return (
     <div className="pt-24 pb-20 max-w-2xl mx-auto px-4">
+      {/* NEW: TABS UI */}
+      <div className="flex border-b border-white/10 mb-6">
+        <button
+          onClick={() => setFeedFilter('GLOBAL')}
+          className={`flex-1 pb-3 text-sm font-bold transition-all relative ${
+            feedFilter === 'GLOBAL' ? 'text-white' : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          Global Signal
+          {feedFilter === 'GLOBAL' && (
+            <div className="absolute bottom-0 left-0 w-full h-1 bg-pulse-blue shadow-[0_0_10px_rgba(56,189,248,0.5)] rounded-t-full" />
+          )}
+        </button>
+        <button
+          onClick={() => setFeedFilter('FOLLOWING')}
+          className={`flex-1 pb-3 text-sm font-bold transition-all relative ${
+            feedFilter === 'FOLLOWING' ? 'text-white' : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          Following
+          {feedFilter === 'FOLLOWING' && (
+            <div className="absolute bottom-0 left-0 w-full h-1 bg-pulse-green shadow-[0_0_10px_rgba(74,222,128,0.5)] rounded-t-full" />
+          )}
+        </button>
+      </div>
+
       <div className="bg-pulse-dark border border-white/10 rounded-xl p-6 mb-8 shadow-2xl backdrop-blur-sm">
         <h3 className="text-lg font-bold mb-4 text-gray-300">Broadcast your Signal</h3>
         <form onSubmit={handlePost}>
@@ -230,97 +264,106 @@ export default function Feed() {
 
       <div className="space-y-6">
         {data?.posts.map((post) => (
-          <>
-            <Link to={`/u/${post.author.username}`} className="flex items-center gap-4 mb-4 group">
-              <div
-                key={post.id}
-                className="bg-pulse-dark p-6 rounded-xl border border-white/5 hover:border-white/10 transition-colors shadow-lg"
-              >
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-800 to-black flex items-center justify-center text-white font-bold border border-white/10 overflow-hidden">
-                    {post.author.avatar ? (
-                      <img
-                        src={post.author.avatar}
-                        alt={post.author.username}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-lg">
-                        {post.author.username.substring(0, 2).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <span className="font-bold text-white text-lg block">
-                      {post.author.username}
-                    </span>
-                    <span className="text-xs text-gray-500">Pulse Node ID: #{post.id}</span>
-                  </div>
-                </div>
-
-                <div className="mb-6">
-                  <p className="text-gray-300 leading-relaxed text-lg whitespace-pre-wrap">
-                    {post.content}
-                  </p>
-                </div>
-
-                <div className="border-t border-white/5 pt-4 flex items-center gap-6">
-                  <button
-                    onClick={() => handleLike(post.id, post.likesCount, post.isLiked)}
-                    className={`flex items-center gap-2 font-bold transition-colors ${post.isLiked ? 'text-red-500' : 'text-gray-400 hover:text-gray-200'}`}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
-                    </svg>
-                    <span>{post.likesCount > 0 ? post.likesCount : 'Like'}</span>
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      setActiveCommentBox(activeCommentBox === post.id ? null : post.id)
-                    }
-                    className="flex items-center gap-2 text-gray-400 hover:text-pulse-blue transition-colors font-bold"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    <span>Comment</span>
-                  </button>
-                </div>
-
-                {activeCommentBox === post.id && (
-                  <div className="mt-4 p-4 bg-black/20 rounded-lg animate-fade-in">
-                    <CommentForm
-                      postId={post.id}
-                      onSuccess={() => setActiveCommentBox(null)}
-                      onCancel={() => setActiveCommentBox(null)}
+          <div key={post.id} className="block group">
+            <div className="bg-pulse-dark p-6 rounded-xl border border-white/5 hover:border-white/10 transition-colors shadow-lg">
+              {/* Header (Clickable Link to Profile) */}
+              <Link to={`/u/${post.author.username}`} className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-800 to-black flex items-center justify-center text-white font-bold border border-white/10 overflow-hidden">
+                  {post.author.avatar ? (
+                    <img
+                      src={post.author.avatar}
+                      alt={post.author.username}
+                      className="w-full h-full object-cover"
                     />
-                  </div>
-                )}
-                <CommentThread comments={post.comments} postId={post.id} />
+                  ) : (
+                    <span className="text-lg">
+                      {post.author.username.substring(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="font-bold text-white text-lg block hover:text-pulse-blue transition-colors">
+                    {post.author.username}
+                  </span>
+                  <span className="text-xs text-gray-500">Pulse Node ID: #{post.id}</span>
+                </div>
+              </Link>
+
+              <div className="mb-6">
+                <p className="text-gray-300 leading-relaxed text-lg whitespace-pre-wrap">
+                  {post.content}
+                </p>
               </div>
-            </Link>
-          </>
+
+              <div className="border-t border-white/5 pt-4 flex items-center gap-6">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent bubbling if you add click handlers to the container later
+                    handleLike(post.id, post.likesCount, post.isLiked);
+                  }}
+                  className={`flex items-center gap-2 font-bold transition-colors ${post.isLiked ? 'text-red-500' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
+                  </svg>
+                  <span>{post.likesCount > 0 ? post.likesCount : 'Like'}</span>
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveCommentBox(activeCommentBox === post.id ? null : post.id);
+                  }}
+                  className="flex items-center gap-2 text-gray-400 hover:text-pulse-blue transition-colors font-bold"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zM7 8H5v2h2V8zm2 0h2v2H9V8zm6 0h-2v2h2V8z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <span>Comment</span>
+                </button>
+              </div>
+
+              {activeCommentBox === post.id && (
+                <div className="mt-4 p-4 bg-black/20 rounded-lg animate-fade-in">
+                  <CommentForm
+                    postId={post.id}
+                    onSuccess={() => setActiveCommentBox(null)}
+                    onCancel={() => setActiveCommentBox(null)}
+                  />
+                </div>
+              )}
+              <CommentThread comments={post.comments} postId={post.id} />
+            </div>
+          </div>
         ))}
 
         {data?.posts.length === 0 && (
           <div className="text-center py-20 opacity-50">
-            <p className="text-xl text-gray-500">No signals detected.</p>
-            <p className="text-sm text-gray-600">Be the first to transmit.</p>
+            {feedFilter === 'FOLLOWING' ? (
+              <>
+                <p className="text-xl text-gray-500">Signal lost.</p>
+                <p className="text-sm text-gray-600">You aren't following anyone yet.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-xl text-gray-500">No signals detected.</p>
+                <p className="text-sm text-gray-600">Be the first to transmit.</p>
+              </>
+            )}
           </div>
         )}
       </div>
