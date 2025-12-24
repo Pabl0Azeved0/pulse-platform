@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:15
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=pulse
+      - POSTGRES_PASSWORD=pulse
+      - POSTGRES_DB=pulse
+
+  backend:
+    build: ./backend
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    volumes:
+      - pulse_uploads_prod:/app/uploads
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://pulse:pulse@db:5432/pulse
+      - SECRET_KEY=supersecretkey_change_this_in_prod
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data_prod:
+  pulse_uploads_prod:
