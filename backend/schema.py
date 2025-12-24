@@ -313,7 +313,9 @@ class Mutation:
 @strawberry.type
 class Query:
     @strawberry.field
-    async def posts(self, viewer: Optional[str] = None) -> List[PostType]:
+    async def posts(
+        self, viewer: Optional[str] = None, filter_type: str = "GLOBAL"
+    ) -> List[PostType]:
         async for session in get_session():
             viewer_id = None
             if viewer:
@@ -325,11 +327,15 @@ class Query:
                 if u:
                     viewer_id = u.id
 
-            posts_list = (
-                (await session.execute(select(Post).order_by(Post.id.desc())))
-                .scalars()
-                .all()
-            )
+            query = select(Post).order_by(Post.id.desc())
+
+            if filter_type == "FOLLOWING" and viewer_id:
+                subquery = select(Follow.followed_id).where(
+                    Follow.follower_id == viewer_id
+                )
+                query = query.where(Post.user_id.in_(subquery))
+
+            posts_list = (await session.execute(query)).scalars().all()
 
             response_posts = []
             for p in posts_list:
@@ -344,6 +350,7 @@ class Query:
                         select(func.count(Like.id)).where(Like.post_id == p.id)
                     )
                 ).scalar() or 0
+
                 user_liked = False
                 if viewer_id:
                     check = (
