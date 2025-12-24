@@ -14,9 +14,7 @@ const UPDATE_AVATAR = gql`
 `;
 
 // Helper to generate retro options
-const RETRO_STYLES = [
-  'pixel-art', 'bottts', 'identicon', 'retro', 'thumbs'
-];
+const RETRO_STYLES = ['pixel-art', 'bottts', 'identicon', 'retro', 'thumbs'];
 
 export default function Settings() {
   const { user } = useAuth();
@@ -46,7 +44,9 @@ export default function Settings() {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      await new Promise((resolve) => { image.onload = resolve; });
+      await new Promise((resolve) => {
+        image.onload = resolve;
+      });
 
       canvas.width = croppedAreaPixels!.width;
       canvas.height = croppedAreaPixels!.height;
@@ -74,11 +74,11 @@ export default function Settings() {
     if (!user) return;
     try {
       await updateAvatar({
-        variables: { username: user.username, avatarData }
+        variables: { username: user.username, avatarData },
       });
       const updatedUser = { ...user, avatar: avatarData };
       localStorage.setItem('user', JSON.stringify(updatedUser));
-      window.location.reload(); 
+      window.location.reload();
     } catch (err) {
       console.error(err);
     }
@@ -101,30 +101,31 @@ export default function Settings() {
       <h1 className="text-3xl font-bold mb-8 border-b border-white/10 pb-4">Profile Settings</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-        
         {/* --- LEFT SIDE: UPLOAD & CROP --- */}
         <div className="bg-pulse-dark p-8 rounded-xl border border-white/5">
           <h3 className="text-xl font-bold mb-6 text-gray-300">Custom Avatar</h3>
-          
+
           <div className="flex flex-col items-center">
             {/* The Avatar Circle */}
             <div className="relative group w-40 h-40 mb-6">
-               {/* Current Image */}
-               <div className="w-full h-full rounded-full overflow-hidden border-4 border-pulse-blue bg-black flex items-center justify-center">
-                  {user?.avatar ? (
-                    <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-4xl font-bold text-gray-500">{user?.username.substring(0, 2).toUpperCase()}</span>
-                  )}
-               </div>
+              {/* Current Image */}
+              <div className="w-full h-full rounded-full overflow-hidden border-4 border-pulse-blue bg-black flex items-center justify-center">
+                {user?.avatar ? (
+                  <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-4xl font-bold text-gray-500">
+                    {user?.username.substring(0, 2).toUpperCase()}
+                  </span>
+                )}
+              </div>
 
-               {/* Camera Overlay */}
-               <label className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
-                  <span className="text-white font-bold">📷 Upload</span>
-                  <input type="file" className="hidden" accept="image/*" onChange={onFileChange} />
-               </label>
+              {/* Camera Overlay */}
+              <label className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+                <span className="text-white font-bold">📷 Upload</span>
+                <input type="file" className="hidden" accept="image/*" onChange={onFileChange} />
+              </label>
             </div>
-            
+
             <p className="text-sm text-gray-500">Click the image to upload a new photo.</p>
           </div>
 
@@ -143,13 +144,13 @@ export default function Settings() {
                 />
               </div>
               <div className="flex gap-4">
-                <button 
+                <button
                   onClick={() => setIsCropping(false)}
                   className="px-6 py-2 bg-gray-600 rounded-full text-white font-bold"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   onClick={finalizeCrop}
                   disabled={loading}
                   className="px-6 py-2 bg-pulse-green text-black font-bold rounded-full"
@@ -165,26 +166,25 @@ export default function Settings() {
         <div className="bg-pulse-dark p-8 rounded-xl border border-white/5">
           <h3 className="text-xl font-bold mb-6 text-gray-300">Retro Library</h3>
           <p className="text-sm text-gray-500 mb-6">Feeling nostalgic? Pick a generated style.</p>
-          
+
           <div className="grid grid-cols-3 gap-4">
-             {RETRO_STYLES.map((style) => {
-               // Generate a URL based on the username + style
-               const url = `https://api.dicebear.com/7.x/${style}/svg?seed=${user?.username}`;
-               
-               return (
-                 <button 
-                    key={style}
-                    onClick={() => handleSave(url)}
-                    className="p-2 border border-white/10 rounded-lg hover:border-pulse-green hover:bg-white/5 transition-all flex flex-col items-center gap-2"
-                 >
-                    <img src={url} alt={style} className="w-16 h-16 rounded-full bg-gray-800" />
-                    <span className="text-xs text-gray-400 capitalize">{style}</span>
-                 </button>
-               );
-             })}
+            {RETRO_STYLES.map((style) => {
+              // Generate a URL based on the username + style
+              const url = `https://api.dicebear.com/7.x/${style}/svg?seed=${user?.username}`;
+
+              return (
+                <button
+                  key={style}
+                  onClick={() => handleSave(url)}
+                  className="p-2 border border-white/10 rounded-lg hover:border-pulse-green hover:bg-white/5 transition-all flex flex-col items-center gap-2"
+                >
+                  <img src={url} alt={style} className="w-16 h-16 rounded-full bg-gray-800" />
+                  <span className="text-xs text-gray-400 capitalize">{style}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
-
       </div>
     </div>
   );
