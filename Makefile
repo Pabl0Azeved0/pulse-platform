@@ -11,7 +11,9 @@ help:
 	@echo "  restart-full  : 🔥 NUKE & PAVE: Wipes volumes, images, and rebuilds everything"
 	@echo "  populate-db   : 🌱 Runs the Python script to seed the DB with users/posts"
 	@echo "  format        : 🎨 Auto-formats Backend (Black) and Frontend (Prettier)"
-	@echo "  help          : ℹ️  Show this help message"
+	@echo ""
+	@echo "Prod Commands:"
+	@echo "  prod          : 🚀 Build and Run in Production Mode (Nginx)"
 	@echo ""
 
 restart-full:
@@ -54,3 +56,10 @@ format:
 	@echo "🎨 Formatting Frontend (Prettier)..."
 	@cd frontend && npx prettier --write "src/**/*.{ts,tsx,css,json}"
 	@echo "✅ Code formatting complete!"
+
+prod:
+	@echo "🚀 Building and Starting Production Environment..."
+	@# We stop the dev containers first to free up ports
+	@docker compose down
+	@docker compose -f docker-compose.prod.yml up --build -d
+	@echo "✅ Pulse is live at http://localhost (Port 80)"
