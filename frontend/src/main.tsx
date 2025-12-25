@@ -13,22 +13,21 @@ const httpLink = new HttpLink({
 });
 
 // 2. WebSocket Link (Subscriptions)
-const wsLink = new GraphQLWsLink(createClient({
-  url: 'ws://localhost:8000/graphql', // Note the ws:// protocol
-}));
+const wsLink = new GraphQLWsLink(
+  createClient({
+    url: 'ws://localhost:8000/graphql', // Note the ws:// protocol
+  })
+);
 
 // 3. The Splitter (Traffic Director)
 // If the operation is a "subscription", use WS. Otherwise, use HTTP.
 const splitLink = split(
   ({ query }) => {
     const definition = getMainDefinition(query);
-    return (
-      definition.kind === 'OperationDefinition' &&
-      definition.operation === 'subscription'
-    );
+    return definition.kind === 'OperationDefinition' && definition.operation === 'subscription';
   },
   wsLink,
-  httpLink,
+  httpLink
 );
 
 const client = new ApolloClient({
@@ -41,5 +40,5 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <ApolloProvider client={client}>
       <App />
     </ApolloProvider>
-  </React.StrictMode>,
+  </React.StrictMode>
 );
