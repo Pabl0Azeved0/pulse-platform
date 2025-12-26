@@ -8,18 +8,24 @@ services:
       - POSTGRES_PASSWORD=pulse
       - POSTGRES_DB=pulse
 
+  redis:
+    image: redis:alpine
+
   backend:
     build: ./backend
     command: uvicorn main:app --host 0.0.0.0 --port 8000
     volumes:
       - pulse_uploads_prod:/app/uploads
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://pulse:pulse@db:5432/pulse
-      - SECRET_KEY=supersecretkey_change_this_in_prod
+      - BROADCAST_URL=redis://redis:6379
     ports:
       - "8000:8000"
     depends_on:
       - db
+      - redis
 
   frontend:
     build:
