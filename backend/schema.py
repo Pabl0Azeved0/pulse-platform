@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from models import get_session, User, Post, Like, Comment
 from auth import get_password_hash, verify_password, create_access_token
-from broadcaster import broadcaster
+from events import broadcaster
 
 
 @strawberry.type
