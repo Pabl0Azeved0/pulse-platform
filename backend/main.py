@@ -1,6 +1,4 @@
-import os
-import shutil
-import uuid
+import os, shutil, uuid
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -8,30 +6,31 @@ from strawberry.fastapi import GraphQLRouter
 
 from models import init_db
 from schema import schema
+from events import broadcaster
 
 
+# --- CONFIGURATION ---
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI()
 
+# --- MIDDLEWARE ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# GraphQL Endpoint
+# --- ROUTES ---
 graphql_app = GraphQLRouter(schema)
 app.include_router(graphql_app, prefix="/graphql")
 
-# Static Files (Avatar Uploads)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
-# REST Upload Endpoint
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     file_extension = file.filename.split(".")[-1]
@@ -44,7 +43,12 @@ async def upload_file(file: UploadFile = File(...)):
     return {"url": f"http://localhost:8000/uploads/{unique_filename}"}
 
 
-# --- 4. STARTUP ---
 @app.on_event("startup")
 async def on_startup():
     await init_db()
+    await broadcaster.connect()
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await broadcaster.disconnect()
