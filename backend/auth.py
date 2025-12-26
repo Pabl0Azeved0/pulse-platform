@@ -1,10 +1,8 @@
 import os
-from dotenv import load_dotenv
 from passlib.context import CryptContext
 from jose import jwt
 from datetime import datetime, timedelta
 
-load_dotenv()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -18,11 +16,18 @@ def get_password_hash(password):
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire_minutes = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
-    expire_minutes = int(expire_minutes) if expire_minutes else 30
+
+    access_token_expire = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
+    expire_minutes = int(access_token_expire) if access_token_expire else 30
+
     expire = datetime.utcnow() + timedelta(minutes=expire_minutes)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(
-        to_encode, os.getenv("SECRET_KEY"), algorithm=os.getenv("ALGORITHM")
-    )
+
+    secret_key = os.getenv("SECRET_KEY")
+    algorithm = os.getenv("ALGORITHM")
+
+    if not secret_key or not algorithm:
+        raise ValueError("CRITICAL: SECRET_KEY or ALGORITHM not found in environment.")
+
+    encoded_jwt = jwt.encode(to_encode, secret_key, algorithm=algorithm)
     return encoded_jwt
