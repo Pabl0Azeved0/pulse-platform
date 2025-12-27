@@ -101,11 +101,6 @@ export default function Profile() {
     if (!user || !data?.profile) return;
     const isFollowing = data.profile.isFollowing;
 
-    const newIsFollowing = !isFollowing;
-    const newCount = isFollowing
-      ? data.profile.followersCount - 1
-      : data.profile.followersCount + 1;
-
     try {
       if (isFollowing) {
         await unfollowUser({ variables: { follower: user.username, target: username } });
