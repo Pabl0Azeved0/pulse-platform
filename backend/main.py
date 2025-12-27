@@ -45,7 +45,6 @@ async def upload_file(file: UploadFile = File(...)):
 
 @app.on_event("startup")
 async def on_startup():
-    await init_db()
     await broadcaster.connect()
 
 
