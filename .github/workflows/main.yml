@@ -33,7 +33,7 @@ jobs:
       run: sleep 10
 
     - name: Run Tests
-      run: docker compose exec -T backend python -m pytest -v
+      run: docker compose exec -T backend python -m pytest -p no:cacheprovider -v
 
     - name: Teardown
       if: always()
