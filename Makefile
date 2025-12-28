@@ -6,6 +6,7 @@ help:
 	@echo "Usage: make [command]"
 	@echo ""
 	@echo "Commands:"
+	@echo "  test          : 🧪 Run the test cases"
 	@echo "  restart       : 🔄 Standard restart (stop containers, rebuild, and up)"
 	@echo "  restart-db    : 💽 Wipes the Database volume and restarts (Fresh DB)"
 	@echo "  restart-full  : 🔥 NUKE & PAVE: Wipes volumes, images, and rebuilds everything"
@@ -15,6 +16,10 @@ help:
 	@echo "Prod Commands:"
 	@echo "  prod          : 🚀 Build and Run in Production Mode (Nginx)"
 	@echo ""
+
+test:
+	@echo "🧪 Running Tests..."
+	@docker compose exec backend pytest -v
 
 restart-full:
 	@echo "🔥 Nuke & Pave: Stopping containers, pruning volumes & images..."
