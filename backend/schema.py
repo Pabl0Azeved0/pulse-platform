@@ -241,19 +241,6 @@ class Mutation:
             return format_user(user)
 
     @strawberry.mutation
-    async def follow_user(self, username: str) -> bool:
-        async for session in get_session():
-            # 1. Get Viewer
-            # (In a real app, you'd get the current user from context/token.
-            # For this MVP we pass 'viewer' as an arg, OR strictly speaking,
-            # we should get the current user from the request context.
-            # To keep it consistent with your current code, let's assume we pass the viewer's username as an argument?
-            # WAIT: Your current auth flow extracts user from token in 'login', but for mutations we usually need context.
-            # Let's add a 'follower_username' argument to be explicit, matching your style).
-            pass
-
-    # Let's actually implement it matching your pattern (passing username explicitly)
-    @strawberry.mutation
     async def follow_user(self, follower_username: str, target_username: str) -> bool:
         async for session in get_session():
             # Get Follower
@@ -308,6 +295,30 @@ class Mutation:
                 await session.commit()
                 return True
             return False
+
+    @strawberry.mutation
+    async def update_user(
+        self, bio: Optional[str] = None, avatar: Optional[str] = None
+    ) -> UserType:
+        user = await get_current_user()
+        if not user:
+            raise Exception("Not authenticated")
+
+        async for session in get_session():
+            # fetch the user object attached to this session
+            db_user = (
+                (await session.execute(select(User).where(User.id == user.id)))
+                .scalars()
+                .first()
+            )
+
+            if bio is not None:
+                db_user.bio = bio
+            if avatar is not None:
+                db_user.avatar = avatar
+
+            await session.commit()
+            return format_user(db_user)
 
 
 @strawberry.type
