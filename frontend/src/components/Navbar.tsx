@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useState, useRef, useEffect } from 'react';
 
@@ -6,6 +6,7 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
 
   const getInitials = (name: string) => name.substring(0, 2).toUpperCase();
 
@@ -20,11 +21,13 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const isActive = (path: string) => location.pathname === path;
+
   return (
     <nav className="fixed top-0 w-full z-50 bg-black/80 backdrop-blur-md border-b border-white/10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
+          {/* LEFT: Logo */}
           <Link to="/" className="flex items-center gap-2 group">
             <div className="w-8 h-8 bg-gradient-to-tr from-pulse-blue to-pulse-green rounded-full animate-pulse group-hover:scale-110 transition-transform" />
             <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 tracking-tighter">
@@ -32,15 +35,39 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* RIGHT SIDE: Conditional Rendering */}
+          {/* CENTER: Desktop Navigation (New addition) */}
+          {user && (
+            <div className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
+              <Link
+                to="/"
+                className={`text-sm font-bold transition-colors ${
+                  isActive('/') ? 'text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Feed
+              </Link>
+              <Link
+                to="/search"
+                className={`text-sm font-bold transition-colors ${
+                  isActive('/search') ? 'text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Explore
+              </Link>
+            </div>
+          )}
+
+          {/* RIGHT SIDE: Icons & Dropdown */}
           <div className="flex items-center gap-6">
             {user ? (
               // --- LOGGED IN STATE ---
               <>
-                {/* Search Icon */}
+                {/* Search Icon (Visible on Mobile/Tablet or as quick access) */}
                 <Link
                   to="/search"
-                  className="text-gray-400 hover:text-white transition-colors p-2 rounded-full hover:bg-white/5"
+                  className={`transition-colors p-2 rounded-full hover:bg-white/5 ${
+                    isActive('/search') ? 'text-pulse-blue' : 'text-gray-400 hover:text-white'
+                  }`}
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
