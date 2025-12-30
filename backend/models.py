@@ -28,6 +28,19 @@ class User(Base):
     posts = relationship("Post", back_populates="author")
     comments = relationship("Comment", back_populates="author")
 
+    followers = relationship(
+        "Follow",
+        foreign_keys="[Follow.followed_id]",
+        backref="followed",
+        lazy="selectin",
+    )
+    following = relationship(
+        "Follow",
+        foreign_keys="[Follow.follower_id]",
+        backref="follower",
+        lazy="selectin",
+    )
+
 
 class Post(Base):
     __tablename__ = "posts"
