@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { useLazyQuery, gql } from '@apollo/client';
+import { useLazyQuery, gql, useMutation } from '@apollo/client';
 import { Link } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 
-// Reuse types logic or import
 const SEARCH_QUERY = gql`
   query Search($query: String!, $viewer: String) {
     search(query: $query, viewer: $viewer) {
@@ -11,6 +10,7 @@ const SEARCH_QUERY = gql`
         username
         avatar
         bio
+        isFollowing
       }
       posts {
         id
@@ -26,17 +26,45 @@ const SEARCH_QUERY = gql`
   }
 `;
 
+const FOLLOW_MUTATION = gql`
+  mutation Follow($follower: String!, $target: String!) {
+    followUser(followerUsername: $follower, targetUsername: $target)
+  }
+`;
+
+const UNFOLLOW_MUTATION = gql`
+  mutation Unfollow($follower: String!, $target: String!) {
+    unfollowUser(followerUsername: $follower, targetUsername: $target)
+  }
+`;
+
 export default function Search() {
   const { user } = useAuth();
   const [term, setTerm] = useState('');
 
-  // lazyQuery allows us to trigger the search manually
   const [executeSearch, { data, loading }] = useLazyQuery(SEARCH_QUERY);
+  const [followUser] = useMutation(FOLLOW_MUTATION);
+  const [unfollowUser] = useMutation(UNFOLLOW_MUTATION);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (term.trim()) {
       executeSearch({ variables: { query: term, viewer: user?.username } });
+    }
+  };
+
+  const handleFollowToggle = async (targetUsername: string, isFollowing: boolean) => {
+    if (!user) return;
+    try {
+      if (isFollowing) {
+        await unfollowUser({ variables: { follower: user.username, target: targetUsername } });
+      } else {
+        await followUser({ variables: { follower: user.username, target: targetUsername } });
+      }
+      // Re-run search to update UI state
+      executeSearch({ variables: { query: term, viewer: user.username } });
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -90,27 +118,42 @@ export default function Search() {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {data.search.users.map((u: any) => (
-                  <Link
+                  <div
                     key={u.username}
-                    to={`/u/${u.username}`}
-                    className="flex items-center gap-3 bg-pulse-dark p-4 rounded-lg border border-white/5 hover:border-pulse-blue/50 transition-all"
+                    className="flex flex-col gap-3 bg-pulse-dark p-4 rounded-lg border border-white/5 hover:border-pulse-blue/50 transition-all relative group"
                   >
-                    <div className="w-12 h-12 rounded-full bg-gray-800 overflow-hidden border border-white/10">
-                      {u.avatar ? (
-                        <img src={u.avatar} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center font-bold text-gray-500">
-                          {u.username[0]}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <span className="font-bold text-white block">{u.username}</span>
-                      <span className="text-xs text-gray-500 truncate block max-w-[150px]">
-                        {u.bio || 'No bio'}
-                      </span>
-                    </div>
-                  </Link>
+                    <Link to={`/u/${u.username}`} className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-gray-800 overflow-hidden border border-white/10">
+                        {u.avatar ? (
+                          <img src={u.avatar} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center font-bold text-gray-500">
+                            {u.username[0]}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <span className="font-bold text-white block">{u.username}</span>
+                        <span className="text-xs text-gray-500 truncate block max-w-[150px]">
+                          {u.bio || 'No bio'}
+                        </span>
+                      </div>
+                    </Link>
+
+                    {/* Follow Button (Only show if not me) */}
+                    {user && user.username !== u.username && (
+                      <button
+                        onClick={() => handleFollowToggle(u.username, u.isFollowing)}
+                        className={`w-full py-1.5 rounded text-xs font-bold transition-colors ${
+                          u.isFollowing
+                            ? 'bg-transparent border border-gray-600 text-gray-400 hover:border-red-500 hover:text-red-500'
+                            : 'bg-pulse-blue text-black hover:opacity-90'
+                        }`}
+                      >
+                        {u.isFollowing ? 'Unfollow' : 'Follow'}
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             </section>
