@@ -16,9 +16,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app = FastAPI()
 
 # --- MIDDLEWARE ---
+origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
