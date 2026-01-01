@@ -258,6 +258,9 @@ export default function Profile() {
           currentBio={profile.bio || ''}
           currentAvatar={profile.avatar}
           onClose={() => setIsEditing(false)}
+          onSuccess={() => {
+            refetch();
+          }}
         />
       )}
     </div>
