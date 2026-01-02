@@ -1,4 +1,5 @@
 import strawberry, jwt
+from jose import jwt, JWTError
 from typing import List, Optional, AsyncGenerator
 from datetime import datetime
 from sqlalchemy.future import select
@@ -86,34 +87,46 @@ async def get_current_user(info: Info) -> Optional[User]:
     """
     Extracts the user from the Authorization header (JWT).
     """
+    # 1. Get Request from Context
     request = info.context.get("request")
     if not request:
+        print("🔴 DEBUG: No request object in context")
         return None
 
+    # 2. Get Header
     auth_header = request.headers.get("Authorization")
     if not auth_header:
+        print("🔴 DEBUG: No Authorization header found")
         return None
 
     try:
+        # 3. Parse Token
         scheme, token = auth_header.split()
         if scheme.lower() != "bearer":
+            print(f"🔴 DEBUG: Invalid scheme {scheme}")
             return None
 
-        # Decode token
+        # 4. Decode Token (Using python-jose)
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
 
         if not username:
+            print("🔴 DEBUG: No username in token payload")
             return None
 
-        # Find user in DB
+        # 5. Find user in DB
         async for session in get_session():
             stmt = select(User).where(User.username == username)
             user = (await session.execute(stmt)).scalars().first()
+            if not user:
+                print(f"🔴 DEBUG: User {username} not found in DB")
             return user
 
+    except JWTError as e:
+        print(f"🔴 DEBUG: JWT Error: {e}")
+        return None
     except Exception as e:
-        print(f"Auth Error: {e}")
+        print(f"🔴 DEBUG: General Auth Error: {e}")
         return None
 
 
