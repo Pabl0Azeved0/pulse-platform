@@ -1,12 +1,19 @@
-import strawberry
+import strawberry, jwt
 from typing import List, Optional, AsyncGenerator
 from datetime import datetime
 from sqlalchemy.future import select
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
+from strawberry.types import Info
 
 from models import get_session, User, Post, Like, Comment, Follow
-from auth import get_password_hash, verify_password, create_access_token
+from auth import (
+    get_password_hash,
+    verify_password,
+    create_access_token,
+    ALGORITHM,
+    SECRET_KEY,
+)
 from events import broadcaster
 
 
@@ -20,7 +27,6 @@ class UserType:
     created_at: str
     posts_count: int
     posts: List["PostType"]
-    # Added for Search UI
     is_following: bool
 
 
@@ -74,6 +80,41 @@ class SearchResults:
 
 
 # --- HELPERS ---
+
+
+async def get_current_user(info: Info) -> Optional[User]:
+    """
+    Extracts the user from the Authorization header (JWT).
+    """
+    request = info.context.get("request")
+    if not request:
+        return None
+
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return None
+
+    try:
+        scheme, token = auth_header.split()
+        if scheme.lower() != "bearer":
+            return None
+
+        # Decode token
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+
+        if not username:
+            return None
+
+        # Find user in DB
+        async for session in get_session():
+            stmt = select(User).where(User.username == username)
+            user = (await session.execute(stmt)).scalars().first()
+            return user
+
+    except Exception as e:
+        print(f"Auth Error: {e}")
+        return None
 
 
 def format_user(user_db, viewer_id: Optional[int] = None) -> UserType:
@@ -302,15 +343,36 @@ class Mutation:
                 return True
             return False
 
-    # This general update_user mutation you had is good to keep
     @strawberry.mutation
     async def update_user(
-        self, bio: Optional[str] = None, avatar: Optional[str] = None
+        self, info: Info, bio: Optional[str] = None, avatar: Optional[str] = None
     ) -> UserType:
-        # We need the username from context ideally, but here we reuse your logic
-        # Assuming you'll fix the user retrieval in a real scenario
-        # For now, let's just leave this as is from your provided file
-        return await self.update_profile("placeholder", bio)  # Placeholder
+        # 1. Authenticate via Token (Secure)
+        user = await get_current_user(info)
+        if not user:
+            raise Exception("Not authenticated")
+
+        # 2. Update DB
+        async for session in get_session():
+            # Re-fetch user within this session to ensure attachment
+            db_user = (
+                (await session.execute(select(User).where(User.id == user.id)))
+                .scalars()
+                .first()
+            )
+
+            if not db_user:
+                raise Exception("User not found")
+
+            if bio is not None:
+                db_user.bio = bio
+            if avatar is not None:
+                db_user.avatar = avatar
+
+            await session.commit()
+            await session.refresh(db_user)
+
+            return format_user(db_user)
 
 
 @strawberry.type
