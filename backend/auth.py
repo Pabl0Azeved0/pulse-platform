@@ -4,6 +4,8 @@ from jose import jwt
 from datetime import datetime, timedelta
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+SECRET_KEY = os.getenv("SECRET_KEY", "super_secret_key")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
 
 def verify_password(plain_password, hashed_password):
