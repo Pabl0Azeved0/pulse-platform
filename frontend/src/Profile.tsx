@@ -32,8 +32,8 @@ const GET_PROFILE = gql`
 // Note: We keep this mutation here if you want to use the "Quick Camera Icon"
 // but the Modal now handles this too.
 const UPDATE_AVATAR = gql`
-  mutation UpdateAvatar($username: String!, $avatarUrl: String!) {
-    updateAvatar(username: $username, avatarData: $avatarUrl) {
+  mutation UpdateAvatar($avatarUrl: String!) {
+    updateAvatar(avatarData: $avatarUrl) {
       id
       avatar
     }
@@ -41,14 +41,14 @@ const UPDATE_AVATAR = gql`
 `;
 
 const FOLLOW_MUTATION = gql`
-  mutation Follow($follower: String!, $target: String!) {
-    followUser(followerUsername: $follower, targetUsername: $target)
+  mutation Follow($target: String!) {
+    followUser(targetUsername: $target)
   }
 `;
 
 const UNFOLLOW_MUTATION = gql`
-  mutation Unfollow($follower: String!, $target: String!) {
-    unfollowUser(followerUsername: $follower, targetUsername: $target)
+  mutation Unfollow($target: String!) {
+    unfollowUser(targetUsername: $target)
   }
 `;
 
@@ -85,7 +85,6 @@ export default function Profile() {
 
       await updateAvatar({
         variables: {
-          username: user.username,
           avatarUrl: result.url,
         },
       });
@@ -104,9 +103,9 @@ export default function Profile() {
 
     try {
       if (isFollowing) {
-        await unfollowUser({ variables: { follower: user.username, target: username } });
+        await unfollowUser({ variables: { target: username } });
       } else {
-        await followUser({ variables: { follower: user.username, target: username } });
+        await followUser({ variables: { target: username } });
       }
       refetch();
     } catch (err) {

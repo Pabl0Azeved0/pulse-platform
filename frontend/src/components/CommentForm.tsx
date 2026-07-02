@@ -3,8 +3,8 @@ import { useMutation, gql } from '@apollo/client';
 import { useAuth } from '../context/AuthContext';
 
 const CREATE_COMMENT = gql`
-  mutation CreateComment($username: String!, $postId: Int!, $content: String!, $parentId: Int) {
-    createComment(username: $username, postId: $postId, content: $content, parentId: $parentId) {
+  mutation CreateComment($postId: Int!, $content: String!, $parentId: Int) {
+    createComment(postId: $postId, content: $content, parentId: $parentId) {
       id
       content
       likesCount
@@ -136,7 +136,6 @@ export default function CommentForm({ postId, parentId, onSuccess, onCancel }: C
     try {
       await createComment({
         variables: {
-          username: user.username,
           postId,
           content,
           parentId: parentId || null,

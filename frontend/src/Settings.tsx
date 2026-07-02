@@ -6,8 +6,8 @@ import type { Area } from 'react-easy-crop';
 
 // Mutation to save the result
 const UPDATE_AVATAR = gql`
-  mutation UpdateAvatar($username: String!, $avatarData: String!) {
-    updateAvatar(username: $username, avatarData: $avatarData) {
+  mutation UpdateAvatar($avatarData: String!) {
+    updateAvatar(avatarData: $avatarData) {
       avatar
     }
   }
@@ -74,7 +74,7 @@ export default function Settings() {
     if (!user) return;
     try {
       await updateAvatar({
-        variables: { username: user.username, avatarData },
+        variables: { avatarData },
       });
       const updatedUser = { ...user, avatar: avatarData };
       localStorage.setItem('user', JSON.stringify(updatedUser));

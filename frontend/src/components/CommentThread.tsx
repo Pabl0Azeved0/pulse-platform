@@ -19,8 +19,8 @@ interface Comment {
 }
 
 const LIKE_COMMENT = gql`
-  mutation LikeComment($username: String!, $commentId: Int!) {
-    likeComment(username: $username, commentId: $commentId)
+  mutation LikeComment($commentId: Int!) {
+    likeComment(commentId: $commentId)
   }
 `;
 
@@ -46,7 +46,7 @@ const CommentItem = ({
     const newCount = newLikedState ? comment.likesCount + 1 : comment.likesCount - 1;
 
     likeComment({
-      variables: { username: user.username, commentId: comment.id },
+      variables: { commentId: comment.id },
       optimisticResponse: { likeComment: newCount },
       update: (cache, { data: { likeComment: returnedCount } }) => {
         const id = cache.identify({ __typename: 'CommentType', id: comment.id });

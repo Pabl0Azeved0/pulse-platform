@@ -27,14 +27,14 @@ const SEARCH_QUERY = gql`
 `;
 
 const FOLLOW_MUTATION = gql`
-  mutation Follow($follower: String!, $target: String!) {
-    followUser(followerUsername: $follower, targetUsername: $target)
+  mutation Follow($target: String!) {
+    followUser(targetUsername: $target)
   }
 `;
 
 const UNFOLLOW_MUTATION = gql`
-  mutation Unfollow($follower: String!, $target: String!) {
-    unfollowUser(followerUsername: $follower, targetUsername: $target)
+  mutation Unfollow($target: String!) {
+    unfollowUser(targetUsername: $target)
   }
 `;
 
@@ -57,9 +57,9 @@ export default function Search() {
     if (!user) return;
     try {
       if (isFollowing) {
-        await unfollowUser({ variables: { follower: user.username, target: targetUsername } });
+        await unfollowUser({ variables: { target: targetUsername } });
       } else {
-        await followUser({ variables: { follower: user.username, target: targetUsername } });
+        await followUser({ variables: { target: targetUsername } });
       }
       // Re-run search to update UI state
       executeSearch({ variables: { query: term, viewer: user.username } });

@@ -99,8 +99,8 @@ const POST_SUBSCRIPTION = gql`
 `;
 
 const CREATE_POST = gql`
-  mutation CreatePost($username: String!, $content: String!) {
-    createPost(username: $username, content: $content) {
+  mutation CreatePost($content: String!) {
+    createPost(content: $content) {
       id
       content
       likesCount
@@ -114,8 +114,8 @@ const CREATE_POST = gql`
 `;
 
 const LIKE_MUTATION = gql`
-  mutation LikePost($username: String!, $postId: Int!) {
-    likePost(username: $username, postId: $postId)
+  mutation LikePost($postId: Int!) {
+    likePost(postId: $postId)
   }
 `;
 
@@ -171,7 +171,7 @@ export default function Feed() {
 
     try {
       await createPost({
-        variables: { username: user.username, content },
+        variables: { content },
       });
       setContent('');
     } catch (err) {
@@ -186,7 +186,7 @@ export default function Feed() {
     const newCount = isNowLiked ? currentLikes + 1 : currentLikes - 1;
 
     likePost({
-      variables: { username: user.username, postId },
+      variables: { postId },
       optimisticResponse: { likePost: newCount },
       update: (cache, { data: { likePost: returnedCount } }) => {
         const cacheId = cache.identify({ __typename: 'PostType', id: postId });
