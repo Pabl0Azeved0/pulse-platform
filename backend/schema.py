@@ -1,3 +1,4 @@
+import json
 import strawberry, jwt
 from jose import jwt, JWTError
 from typing import List, Optional, AsyncGenerator
@@ -16,6 +17,9 @@ from auth import (
     SECRET_KEY,
 )
 from events import broadcaster
+
+# Channel the new-post subscription publishes to / listens on.
+NEW_POSTS_CHANNEL = "posts"
 
 
 @strawberry.type
@@ -192,13 +196,12 @@ class Mutation:
             return AuthPayload(access_token=token, user=format_user(user))
 
     @strawberry.mutation
-    async def create_post(self, username: str, content: str) -> PostType:
-        async for session in get_session():
-            q = select(User).where(User.username == username)
-            user = (await session.execute(q)).scalars().first()
-            if not user:
-                raise Exception("User not found")
+    async def create_post(self, info: Info, content: str) -> PostType:
+        user = await get_current_user(info)
+        if not user:
+            raise Exception("Not authenticated")
 
+        async for session in get_session():
             new_post = Post(content=content, user_id=user.id)
             session.add(new_post)
             await session.commit()
@@ -212,17 +215,27 @@ class Mutation:
                 author=format_user(user),
                 comments=[],
             )
-            await broadcaster.publish(post_response)
+            # Publish a serializable payload (Redis carries strings, not objects).
+            await broadcaster.publish(
+                channel=NEW_POSTS_CHANNEL,
+                message=json.dumps(
+                    {
+                        "id": new_post.id,
+                        "content": new_post.content,
+                        "author_username": user.username,
+                        "author_avatar": user.avatar,
+                    }
+                ),
+            )
             return post_response
 
     @strawberry.mutation
-    async def like_post(self, username: str, post_id: int) -> int:
-        async for session in get_session():
-            q_user = select(User).where(User.username == username)
-            user = (await session.execute(q_user)).scalars().first()
-            if not user:
-                raise Exception("User not found")
+    async def like_post(self, info: Info, post_id: int) -> int:
+        user = await get_current_user(info)
+        if not user:
+            raise Exception("Not authenticated")
 
+        async for session in get_session():
             q_like = select(Like).where(
                 Like.user_id == user.id, Like.post_id == post_id
             )
@@ -238,13 +251,12 @@ class Mutation:
             return (await session.execute(q_count)).scalar() or 0
 
     @strawberry.mutation
-    async def like_comment(self, username: str, comment_id: int) -> int:
-        async for session in get_session():
-            q_user = select(User).where(User.username == username)
-            user = (await session.execute(q_user)).scalars().first()
-            if not user:
-                raise Exception("User not found")
+    async def like_comment(self, info: Info, comment_id: int) -> int:
+        user = await get_current_user(info)
+        if not user:
+            raise Exception("Not authenticated")
 
+        async for session in get_session():
             q_like = select(Like).where(
                 Like.user_id == user.id, Like.comment_id == comment_id
             )
@@ -261,14 +273,13 @@ class Mutation:
 
     @strawberry.mutation
     async def create_comment(
-        self, username: str, post_id: int, content: str, parent_id: Optional[int] = None
+        self, info: Info, post_id: int, content: str, parent_id: Optional[int] = None
     ) -> CommentType:
-        async for session in get_session():
-            q_user = select(User).where(User.username == username)
-            user = (await session.execute(q_user)).scalars().first()
-            if not user:
-                raise Exception("User not found")
+        user = await get_current_user(info)
+        if not user:
+            raise Exception("Not authenticated")
 
+        async for session in get_session():
             new_comment = Comment(
                 content=content,
                 user_id=user.id,
@@ -282,37 +293,46 @@ class Mutation:
             return format_comment_node(new_comment)
 
     @strawberry.mutation
-    async def update_avatar(self, username: str, avatar_data: str) -> UserType:
+    async def update_avatar(self, info: Info, avatar_data: str) -> UserType:
+        user = await get_current_user(info)
+        if not user:
+            raise Exception("Not authenticated")
+
         async for session in get_session():
-            query = select(User).where(User.username == username)
-            user = (await session.execute(query)).scalars().first()
-            if not user:
+            query = select(User).where(User.id == user.id)
+            db_user = (await session.execute(query)).scalars().first()
+            if not db_user:
                 raise Exception("User not found")
-            user.avatar = avatar_data
+            db_user.avatar = avatar_data
             await session.commit()
-            return format_user(user)
+            return format_user(db_user)
 
     @strawberry.mutation
-    async def update_profile(self, username: str, bio: str) -> UserType:
+    async def update_profile(self, info: Info, bio: str) -> UserType:
+        user = await get_current_user(info)
+        if not user:
+            raise Exception("Not authenticated")
+
         async for session in get_session():
-            query = select(User).where(User.username == username)
-            user = (await session.execute(query)).scalars().first()
-            if not user:
+            query = select(User).where(User.id == user.id)
+            db_user = (await session.execute(query)).scalars().first()
+            if not db_user:
                 raise Exception("User not found")
-            user.bio = bio
+            db_user.bio = bio
             await session.commit()
-            return format_user(user)
+            return format_user(db_user)
 
     @strawberry.mutation
-    async def follow_user(self, follower_username: str, target_username: str) -> bool:
-        async for session in get_session():
-            q_follower = select(User).where(User.username == follower_username)
-            follower = (await session.execute(q_follower)).scalars().first()
+    async def follow_user(self, info: Info, target_username: str) -> bool:
+        follower = await get_current_user(info)
+        if not follower:
+            raise Exception("Not authenticated")
 
+        async for session in get_session():
             q_target = select(User).where(User.username == target_username)
             target = (await session.execute(q_target)).scalars().first()
 
-            if not follower or not target:
+            if not target:
                 raise Exception("User not found")
             if follower.id == target.id:
                 raise Exception("Cannot follow yourself")
@@ -334,15 +354,16 @@ class Mutation:
             return False
 
     @strawberry.mutation
-    async def unfollow_user(self, follower_username: str, target_username: str) -> bool:
-        async for session in get_session():
-            q_follower = select(User).where(User.username == follower_username)
-            follower = (await session.execute(q_follower)).scalars().first()
+    async def unfollow_user(self, info: Info, target_username: str) -> bool:
+        follower = await get_current_user(info)
+        if not follower:
+            raise Exception("Not authenticated")
 
+        async for session in get_session():
             q_target = select(User).where(User.username == target_username)
             target = (await session.execute(q_target)).scalars().first()
 
-            if not follower or not target:
+            if not target:
                 raise Exception("User not found")
 
             q_check = select(Follow).where(
@@ -610,8 +631,28 @@ class Query:
 class Subscription:
     @strawberry.subscription
     async def new_post(self) -> AsyncGenerator[PostType, None]:
-        async for post in broadcaster.subscribe():
-            yield post
+        async with broadcaster.subscribe(channel=NEW_POSTS_CHANNEL) as subscriber:
+            async for event in subscriber:
+                data = json.loads(event.message)
+                author = UserType(
+                    id=0,
+                    username=data["author_username"],
+                    email="",
+                    avatar=data.get("author_avatar"),
+                    bio=None,
+                    created_at="",
+                    posts_count=0,
+                    posts=[],
+                    is_following=False,
+                )
+                yield PostType(
+                    id=data["id"],
+                    content=data["content"],
+                    likes_count=0,
+                    is_liked=False,
+                    author=author,
+                    comments=[],
+                )
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation, subscription=Subscription)

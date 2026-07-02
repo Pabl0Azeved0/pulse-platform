@@ -1,4 +1,12 @@
-import os, pytest, pytest_asyncio
+import os
+
+# These must be set before main (and auth.py) are imported, since auth.py
+# caches SECRET_KEY/ALGORITHM at import time.
+os.environ["SECRET_KEY"] = "super_secret_test_key"
+os.environ["ALGORITHM"] = "HS256"
+os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "30"
+
+import pytest, pytest_asyncio
 from unittest.mock import patch
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -6,11 +14,6 @@ from sqlalchemy.orm import sessionmaker
 import models
 from models import Base
 from main import app
-
-# These must be set before the test runs so auth.py finds them
-os.environ["SECRET_KEY"] = "super_secret_test_key"
-os.environ["ALGORITHM"] = "HS256"
-os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "30"
 
 # Use in-memory SQLite for instant, isolated tests
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -29,7 +32,11 @@ async def test_db():
 
     # 3. Create Session Factory
     TestingSessionLocal = sessionmaker(
-        class_=AsyncSession, autocommit=False, autoflush=False, bind=engine
+        class_=AsyncSession,
+        autocommit=False,
+        autoflush=False,
+        expire_on_commit=False,
+        bind=engine,
     )
 
     # 4. Yield the session to the test
