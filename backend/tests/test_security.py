@@ -187,3 +187,64 @@ async def test_query_depth_is_limited(client):
     resp = await client.post("/graphql", json={"query": f"query {{ {body} }}"})
     data = resp.json()
     assert "errors" in data
+
+
+@pytest.mark.asyncio
+async def test_email_not_exposed_in_output(client):
+    # Finding A: email was removed from public output types; selecting it must error.
+    await client.post(
+        "/graphql",
+        json={
+            "query": REGISTER_MUTATION,
+            "variables": {
+                "username": "pii",
+                "email": "pii@secret.com",
+                "password": "strongpassword123",
+            },
+        },
+    )
+    resp = await client.post(
+        "/graphql",
+        json={"query": 'query { search(query:"pii"){ users { username email } } }'},
+    )
+    assert "errors" in resp.json()
+
+
+@pytest.mark.asyncio
+async def test_login_runs_dummy_verify_for_unknown_user(client):
+    # Finding C: an unknown username must still trigger a password verify so
+    # timing does not reveal whether the account exists.
+    with patch("schema.verify_password", return_value=False) as mock_verify:
+        await client.post(
+            "/graphql",
+            json={
+                "query": LOGIN_MUTATION,
+                "variables": {"username": "does-not-exist", "password": "whatever"},
+            },
+        )
+    assert mock_verify.called
+
+
+def test_introspection_disabled_in_production():
+    # Finding D: introspection is blocked when the schema is built for production.
+    from schema import build_schema
+
+    prod = build_schema(production=True)
+    assert prod.execute_sync("{ __schema { types { name } } }").errors
+    dev = build_schema(production=False)
+    assert dev.execute_sync("{ __schema { types { name } } }").errors is None
+
+
+@pytest.mark.asyncio
+async def test_comment_requires_existing_post(client):
+    # Finding E: commenting on a non-existent post must be rejected.
+    token = await _register_and_login(client, "commentsec")
+    mutation = "mutation($pid:Int!,$c:String!){createComment(postId:$pid,content:$c){id}}"
+    resp = await client.post(
+        "/graphql",
+        json={"query": mutation, "variables": {"pid": 99999, "c": "ghost"}},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    data = resp.json()
+    assert "errors" in data
+    assert "Post not found" in data["errors"][0]["message"]
