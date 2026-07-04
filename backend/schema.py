@@ -179,8 +179,13 @@ class Mutation:
 
         _validate_length(username, Schema.USERNAME_MAX_LENGTH, "Username")
         _validate_length(email, Schema.EMAIL_MAX_LENGTH, "Email")
-        if not password or len(password) < Schema.PASSWORD_MIN_LENGTH:
-            raise Exception("Password must be at least 8 characters.")
+        if not password or not (
+            Schema.PASSWORD_MIN_LENGTH <= len(password) <= Schema.PASSWORD_MAX_LENGTH
+        ):
+            raise Exception(
+                f"Password must be between {Schema.PASSWORD_MIN_LENGTH} and "
+                f"{Schema.PASSWORD_MAX_LENGTH} characters."
+            )
 
         async for session in get_session():
             hashed_pw = get_password_hash(password)

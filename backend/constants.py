@@ -9,6 +9,7 @@ class Schema:
     USERNAME_MAX_LENGTH = 50
     EMAIL_MAX_LENGTH = 254
     PASSWORD_MIN_LENGTH = 8
+    PASSWORD_MAX_LENGTH = 128
 
     # Pagination and query-cost guards (mitigate alias/width amplification DoS)
     DEFAULT_PAGE_SIZE = 50
