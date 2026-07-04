@@ -32,38 +32,42 @@ CREATE_POST_MUTATION = """
     }
 """
 
+
 @pytest.mark.asyncio
 async def test_register_and_login(client):
     # 1. Test Registration
-    reg_response = await client.post("/graphql", json={
-        "query": REGISTER_MUTATION,
-        "variables": {
-            "username": "testuser",
-            "email": "test@example.com",
-            "password": "strongpassword123"
-        }
-    })
-    
+    reg_response = await client.post(
+        "/graphql",
+        json={
+            "query": REGISTER_MUTATION,
+            "variables": {
+                "username": "testuser",
+                "email": "test@example.com",
+                "password": "strongpassword123",
+            },
+        },
+    )
+
     assert reg_response.status_code == 200
     data = reg_response.json()
-    
+
     if "errors" in data:
         pytest.fail(f"Register Error: {data['errors']}")
-        
+
     assert data["data"]["register"]["username"] == "testuser"
 
     # 2. Test Login
-    login_response = await client.post("/graphql", json={
-        "query": LOGIN_MUTATION,
-        "variables": {
-            "username": "testuser",
-            "password": "strongpassword123"
-        }
-    })
-    
+    login_response = await client.post(
+        "/graphql",
+        json={
+            "query": LOGIN_MUTATION,
+            "variables": {"username": "testuser", "password": "strongpassword123"},
+        },
+    )
+
     assert login_response.status_code == 200
     login_data = login_response.json()
-    
+
     if "errors" in login_data:
         pytest.fail(f"Login Error: {login_data['errors']}")
 
@@ -73,22 +77,25 @@ async def test_register_and_login(client):
 @pytest.mark.asyncio
 async def test_create_post_requires_auth(client):
     # 1. Register + Login to obtain a token
-    await client.post("/graphql", json={
-        "query": REGISTER_MUTATION,
-        "variables": {
-            "username": "postuser",
-            "email": "postuser@example.com",
-            "password": "strongpassword123"
-        }
-    })
+    await client.post(
+        "/graphql",
+        json={
+            "query": REGISTER_MUTATION,
+            "variables": {
+                "username": "postuser",
+                "email": "postuser@example.com",
+                "password": "strongpassword123",
+            },
+        },
+    )
 
-    login_response = await client.post("/graphql", json={
-        "query": LOGIN_MUTATION,
-        "variables": {
-            "username": "postuser",
-            "password": "strongpassword123"
-        }
-    })
+    login_response = await client.post(
+        "/graphql",
+        json={
+            "query": LOGIN_MUTATION,
+            "variables": {"username": "postuser", "password": "strongpassword123"},
+        },
+    )
     token = login_response.json()["data"]["login"]["accessToken"]
 
     # 2. With a valid token, createPost should succeed

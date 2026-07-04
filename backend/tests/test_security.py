@@ -159,7 +159,7 @@ async def test_posts_query_rejects_viewer_argument(client):
     # The `viewer` argument was removed; identity now comes from the token.
     resp = await client.post(
         "/graphql",
-        json={"query": "query { posts(viewer: \"attacker\") { id } }"},
+        json={"query": 'query { posts(viewer: "attacker") { id } }'},
     )
     data = resp.json()
     assert "errors" in data
@@ -239,7 +239,9 @@ def test_introspection_disabled_in_production():
 async def test_comment_requires_existing_post(client):
     # Finding E: commenting on a non-existent post must be rejected.
     token = await _register_and_login(client, "commentsec")
-    mutation = "mutation($pid:Int!,$c:String!){createComment(postId:$pid,content:$c){id}}"
+    mutation = (
+        "mutation($pid:Int!,$c:String!){createComment(postId:$pid,content:$c){id}}"
+    )
     resp = await client.post(
         "/graphql",
         json={"query": mutation, "variables": {"pid": 99999, "c": "ghost"}},
