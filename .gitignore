@@ -14,3 +14,7 @@ dist/
 .DS_Store
 
 local/
+
+# Developer-only working docs (kept local, never shipped)
+ARCHITECTURE.md
+SECURITY_AUDIT.md
