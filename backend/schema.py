@@ -19,12 +19,8 @@ from auth import (
     DUMMY_PASSWORD_HASH,
 )
 from events import broadcaster
-from rate_limit import (
-    rate_limiter,
-    client_ip,
-    LOGIN_LIMIT,
-    REGISTER_LIMIT,
-)
+from rate_limit import rate_limiter, client_ip
+from constants import Schema, RateLimit
 from strawberry.extensions import (
     QueryDepthLimiter,
     AddValidationRules,
@@ -32,25 +28,11 @@ from strawberry.extensions import (
 )
 from graphql.validation import NoSchemaIntrospectionCustomRule
 
-# --- INPUT LIMITS ---
-MAX_CONTENT_LENGTH = 5000
-MAX_BIO_LENGTH = 500
-MAX_AVATAR_LENGTH = 2048
-
-# Pagination and query-cost guards (mitigate alias/width amplification DoS)
-DEFAULT_PAGE_SIZE = 50
-MAX_PAGE_SIZE = 100
-MAX_ALIASES = 15
-
 
 def _validate_length(value, max_length: int, field: str):
     if value is not None and len(value) > max_length:
         raise Exception(f"{field} exceeds maximum length of {max_length} characters.")
     return value
-
-
-# Channel the new-post subscription publishes to / listens on.
-NEW_POSTS_CHANNEL = "posts"
 
 
 @strawberry.type
@@ -191,13 +173,13 @@ class Mutation:
     ) -> UserType:
         request = info.context.get("request")
         if not rate_limiter.is_allowed(
-            f"register:{client_ip(request)}", *REGISTER_LIMIT
+            f"register:{client_ip(request)}", *RateLimit.REGISTER
         ):
             raise Exception("Too many registration attempts. Please try again later.")
 
-        _validate_length(username, 50, "Username")
-        _validate_length(email, 254, "Email")
-        if not password or len(password) < 8:
+        _validate_length(username, Schema.USERNAME_MAX_LENGTH, "Username")
+        _validate_length(email, Schema.EMAIL_MAX_LENGTH, "Email")
+        if not password or len(password) < Schema.PASSWORD_MIN_LENGTH:
             raise Exception("Password must be at least 8 characters.")
 
         async for session in get_session():
@@ -215,7 +197,7 @@ class Mutation:
     @strawberry.mutation
     async def login(self, info: Info, username: str, password: str) -> AuthPayload:
         request = info.context.get("request")
-        if not rate_limiter.is_allowed(f"login:{client_ip(request)}", *LOGIN_LIMIT):
+        if not rate_limiter.is_allowed(f"login:{client_ip(request)}", *RateLimit.LOGIN):
             raise Exception("Too many login attempts. Please try again later.")
 
         async for session in get_session():
@@ -236,7 +218,7 @@ class Mutation:
         user = await get_current_user(info)
         if not user:
             raise Exception("Not authenticated")
-        _validate_length(content, MAX_CONTENT_LENGTH, "Post content")
+        _validate_length(content, Schema.MAX_CONTENT_LENGTH, "Post content")
 
         async for session in get_session():
             new_post = Post(content=content, user_id=user.id)
@@ -254,7 +236,7 @@ class Mutation:
             )
             # Publish a serializable payload (Redis carries strings, not objects).
             await broadcaster.publish(
-                channel=NEW_POSTS_CHANNEL,
+                channel=Schema.NEW_POSTS_CHANNEL,
                 message=json.dumps(
                     {
                         "id": new_post.id,
@@ -315,7 +297,7 @@ class Mutation:
         user = await get_current_user(info)
         if not user:
             raise Exception("Not authenticated")
-        _validate_length(content, MAX_CONTENT_LENGTH, "Comment content")
+        _validate_length(content, Schema.MAX_CONTENT_LENGTH, "Comment content")
 
         async for session in get_session():
             post = (
@@ -355,7 +337,7 @@ class Mutation:
         user = await get_current_user(info)
         if not user:
             raise Exception("Not authenticated")
-        _validate_length(avatar_data, MAX_AVATAR_LENGTH, "Avatar")
+        _validate_length(avatar_data, Schema.MAX_AVATAR_LENGTH, "Avatar")
 
         async for session in get_session():
             query = select(User).where(User.id == user.id)
@@ -371,7 +353,7 @@ class Mutation:
         user = await get_current_user(info)
         if not user:
             raise Exception("Not authenticated")
-        _validate_length(bio, MAX_BIO_LENGTH, "Bio")
+        _validate_length(bio, Schema.MAX_BIO_LENGTH, "Bio")
 
         async for session in get_session():
             query = select(User).where(User.id == user.id)
@@ -445,8 +427,8 @@ class Mutation:
         user = await get_current_user(info)
         if not user:
             raise Exception("Not authenticated")
-        _validate_length(bio, MAX_BIO_LENGTH, "Bio")
-        _validate_length(avatar, MAX_AVATAR_LENGTH, "Avatar")
+        _validate_length(bio, Schema.MAX_BIO_LENGTH, "Bio")
+        _validate_length(avatar, Schema.MAX_AVATAR_LENGTH, "Avatar")
 
         # 2. Update DB
         async for session in get_session():
@@ -478,7 +460,7 @@ class Query:
         self,
         info: Info,
         filter_type: str = "GLOBAL",
-        limit: int = DEFAULT_PAGE_SIZE,
+        limit: int = Schema.DEFAULT_PAGE_SIZE,
         offset: int = 0,
     ) -> List[PostType]:
         current_user = await get_current_user(info)
@@ -486,7 +468,7 @@ class Query:
             viewer_id = current_user.id if current_user else None
 
             # Clamp pagination so one request can't pull the whole table.
-            limit = max(1, min(limit, MAX_PAGE_SIZE))
+            limit = max(1, min(limit, Schema.MAX_PAGE_SIZE))
             offset = max(0, offset)
 
             query = select(Post).order_by(Post.id.desc())
@@ -678,7 +660,9 @@ class Query:
 class Subscription:
     @strawberry.subscription
     async def new_post(self) -> AsyncGenerator[PostType, None]:
-        async with broadcaster.subscribe(channel=NEW_POSTS_CHANNEL) as subscriber:
+        async with broadcaster.subscribe(
+            channel=Schema.NEW_POSTS_CHANNEL
+        ) as subscriber:
             async for event in subscriber:
                 data = json.loads(event.message)
                 author = UserType(
@@ -703,8 +687,8 @@ class Subscription:
 
 def build_schema(production: bool = False) -> strawberry.Schema:
     extensions = [
-        QueryDepthLimiter(max_depth=12),
-        MaxAliasesLimiter(max_alias_count=MAX_ALIASES),
+        QueryDepthLimiter(max_depth=Schema.MAX_QUERY_DEPTH),
+        MaxAliasesLimiter(max_alias_count=Schema.MAX_ALIASES),
     ]
     if production:
         # Disable schema introspection in production.

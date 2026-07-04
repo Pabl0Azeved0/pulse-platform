@@ -10,12 +10,6 @@ from collections import defaultdict, deque
 from threading import Lock
 from typing import Optional
 
-# (limit, window_seconds) per IP
-LOGIN_LIMIT = (5, 60)
-REGISTER_LIMIT = (5, 60)
-UPLOAD_LIMIT = (20, 60)
-GLOBAL_LIMIT = (120, 60)
-
 
 class SlidingWindowRateLimiter:
     def __init__(self) -> None:
