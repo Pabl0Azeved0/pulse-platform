@@ -248,3 +248,33 @@ async def test_comment_requires_existing_post(client):
     data = resp.json()
     assert "errors" in data
     assert "Post not found" in data["errors"][0]["message"]
+
+
+@pytest.mark.asyncio
+async def test_alias_amplification_blocked(client):
+    # Finding B: many aliases of an expensive resolver in one request are rejected.
+    aliases = " ".join(f"a{i}: posts {{ id }}" for i in range(20))
+    resp = await client.post("/graphql", json={"query": f"query {{ {aliases} }}"})
+    assert "errors" in resp.json()
+
+
+@pytest.mark.asyncio
+async def test_posts_pagination_limit(client):
+    # Finding B: the feed is bounded — limit caps the rows returned.
+    token = await _register_and_login(client, "pager")
+    with patch("schema.broadcaster.publish", new=AsyncMock()):
+        for i in range(3):
+            await client.post(
+                "/graphql",
+                json={
+                    "query": CREATE_POST_MUTATION,
+                    "variables": {"content": f"p{i}"},
+                },
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    resp = await client.post(
+        "/graphql", json={"query": "query { posts(limit: 2) { id } }"}
+    )
+    data = resp.json()
+    assert "errors" not in data
+    assert len(data["data"]["posts"]) == 2
