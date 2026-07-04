@@ -40,12 +40,16 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def global_rate_limit(request: Request, call_next):
+async def rate_limit_and_security_headers(request: Request, call_next):
     if not rate_limiter.is_allowed(f"global:{client_ip(request)}", *RateLimit.GLOBAL):
-        return JSONResponse(
+        response = JSONResponse(
             status_code=429, content={"detail": "Rate limit exceeded. Slow down."}
         )
-    return await call_next(request)
+    else:
+        response = await call_next(request)
+    # Block MIME sniffing — defense-in-depth for user-uploaded files under /uploads.
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 # --- ROUTES ---
