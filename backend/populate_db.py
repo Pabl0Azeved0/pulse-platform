@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.future import select
 from models import init_db, get_session, User, Post, Comment
 from auth import get_password_hash
@@ -107,7 +107,7 @@ async def populate():
             content="Congrats Alice! Is it using Async?",
             user_id=users_map["bob"].id,
             post_id=post1.id,
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
         session.add(c1)
         await session.commit()
@@ -119,7 +119,7 @@ async def populate():
             user_id=users_map["charlie"].id,
             post_id=post1.id,
             parent_id=c1.id,  # <--- Link to Parent
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
         session.add(c2)
         await session.commit()
@@ -131,7 +131,7 @@ async def populate():
             user_id=users_map["eve"].id,
             post_id=post1.id,
             parent_id=c2.id,  # <--- Link to Parent
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
 
         # 4. Eve comments on Dave's post (Top Level)
@@ -139,7 +139,7 @@ async def populate():
             content="True story.",
             user_id=users_map["eve"].id,
             post_id=post2.id,
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
 
         session.add_all([c3, c4])
