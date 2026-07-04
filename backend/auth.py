@@ -14,6 +14,10 @@ if not SECRET_KEY:
         "value (32+ bytes). No insecure default is provided."
     )
 
+# Constant hash used to equalize login timing when a username does not exist
+# (mitigates timing-based user enumeration).
+DUMMY_PASSWORD_HASH = pwd_context.hash("timing-attack-mitigation")
+
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
