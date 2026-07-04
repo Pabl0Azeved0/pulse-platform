@@ -2,7 +2,7 @@ import json
 import strawberry, jwt
 from jose import jwt, JWTError
 from typing import List, Optional, AsyncGenerator
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.future import select
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
@@ -17,6 +17,25 @@ from auth import (
     SECRET_KEY,
 )
 from events import broadcaster
+from rate_limit import (
+    rate_limiter,
+    client_ip,
+    LOGIN_LIMIT,
+    REGISTER_LIMIT,
+)
+from strawberry.extensions import QueryDepthLimiter
+
+# --- INPUT LIMITS ---
+MAX_CONTENT_LENGTH = 5000
+MAX_BIO_LENGTH = 500
+MAX_AVATAR_LENGTH = 2048
+
+
+def _validate_length(value, max_length: int, field: str):
+    if value is not None and len(value) > max_length:
+        raise Exception(f"{field} exceeds maximum length of {max_length} characters.")
+    return value
+
 
 # Channel the new-post subscription publishes to / listens on.
 NEW_POSTS_CHANNEL = "posts"
@@ -87,51 +106,37 @@ class SearchResults:
 # --- HELPERS ---
 
 
-async def get_current_user(info: Info) -> Optional[User]:
-    """
-    Extracts the user from the Authorization header (JWT).
-    """
-    # 1. Get Request from Context
-    request = info.context.get("request")
+async def get_user_from_request(request) -> Optional[User]:
+    """Verify the JWT on a Starlette request and return the matching user, or None."""
     if not request:
-        print("🔴 DEBUG: No request object in context")
         return None
 
-    # 2. Get Header
     auth_header = request.headers.get("Authorization")
     if not auth_header:
-        print("🔴 DEBUG: No Authorization header found")
         return None
 
     try:
-        # 3. Parse Token
         scheme, token = auth_header.split()
         if scheme.lower() != "bearer":
-            print(f"🔴 DEBUG: Invalid scheme {scheme}")
             return None
 
-        # 4. Decode Token (Using python-jose)
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
-
         if not username:
-            print("🔴 DEBUG: No username in token payload")
             return None
 
-        # 5. Find user in DB
         async for session in get_session():
             stmt = select(User).where(User.username == username)
-            user = (await session.execute(stmt)).scalars().first()
-            if not user:
-                print(f"🔴 DEBUG: User {username} not found in DB")
-            return user
+            return (await session.execute(stmt)).scalars().first()
+    except JWTError:
+        return None
+    except Exception:
+        return None
 
-    except JWTError as e:
-        print(f"🔴 DEBUG: JWT Error: {e}")
-        return None
-    except Exception as e:
-        print(f"🔴 DEBUG: General Auth Error: {e}")
-        return None
+
+async def get_current_user(info: Info) -> Optional[User]:
+    """Extract the authenticated user from the GraphQL request context."""
+    return await get_user_from_request(info.context.get("request"))
 
 
 def format_user(user_db, viewer_id: Optional[int] = None) -> UserType:
@@ -150,7 +155,7 @@ def format_user(user_db, viewer_id: Optional[int] = None) -> UserType:
         email=user_db.email,
         avatar=user_db.avatar,
         bio=user_db.bio,
-        created_at=user_db.created_at or datetime.utcnow().isoformat(),
+        created_at=user_db.created_at or datetime.now(timezone.utc).isoformat(),
         posts_count=0,  # Populated only when needed
         posts=[],
         is_following=is_following,
@@ -161,7 +166,7 @@ def format_comment_node(comment_db) -> CommentType:
     return CommentType(
         id=comment_db.id,
         content=comment_db.content,
-        created_at=comment_db.created_at or datetime.utcnow().isoformat(),
+        created_at=comment_db.created_at or datetime.now(timezone.utc).isoformat(),
         author=format_user(comment_db.author),
         replies=[],
         likes_count=0,
@@ -172,7 +177,20 @@ def format_comment_node(comment_db) -> CommentType:
 @strawberry.type
 class Mutation:
     @strawberry.mutation
-    async def register(self, username: str, email: str, password: str) -> UserType:
+    async def register(
+        self, info: Info, username: str, email: str, password: str
+    ) -> UserType:
+        request = info.context.get("request")
+        if not rate_limiter.is_allowed(
+            f"register:{client_ip(request)}", *REGISTER_LIMIT
+        ):
+            raise Exception("Too many registration attempts. Please try again later.")
+
+        _validate_length(username, 50, "Username")
+        _validate_length(email, 254, "Email")
+        if not password or len(password) < 8:
+            raise Exception("Password must be at least 8 characters.")
+
         async for session in get_session():
             hashed_pw = get_password_hash(password)
             new_user = User(username=username, email=email, password_hash=hashed_pw)
@@ -186,7 +204,11 @@ class Mutation:
                 raise Exception("Username or email already taken.")
 
     @strawberry.mutation
-    async def login(self, username: str, password: str) -> AuthPayload:
+    async def login(self, info: Info, username: str, password: str) -> AuthPayload:
+        request = info.context.get("request")
+        if not rate_limiter.is_allowed(f"login:{client_ip(request)}", *LOGIN_LIMIT):
+            raise Exception("Too many login attempts. Please try again later.")
+
         async for session in get_session():
             query = select(User).where(User.username == username)
             user = (await session.execute(query)).scalars().first()
@@ -200,6 +222,7 @@ class Mutation:
         user = await get_current_user(info)
         if not user:
             raise Exception("Not authenticated")
+        _validate_length(content, MAX_CONTENT_LENGTH, "Post content")
 
         async for session in get_session():
             new_post = Post(content=content, user_id=user.id)
@@ -278,6 +301,7 @@ class Mutation:
         user = await get_current_user(info)
         if not user:
             raise Exception("Not authenticated")
+        _validate_length(content, MAX_CONTENT_LENGTH, "Comment content")
 
         async for session in get_session():
             new_comment = Comment(
@@ -285,7 +309,7 @@ class Mutation:
                 user_id=user.id,
                 post_id=post_id,
                 parent_id=parent_id,
-                created_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
             )
             session.add(new_comment)
             await session.commit()
@@ -297,6 +321,7 @@ class Mutation:
         user = await get_current_user(info)
         if not user:
             raise Exception("Not authenticated")
+        _validate_length(avatar_data, MAX_AVATAR_LENGTH, "Avatar")
 
         async for session in get_session():
             query = select(User).where(User.id == user.id)
@@ -312,6 +337,7 @@ class Mutation:
         user = await get_current_user(info)
         if not user:
             raise Exception("Not authenticated")
+        _validate_length(bio, MAX_BIO_LENGTH, "Bio")
 
         async for session in get_session():
             query = select(User).where(User.id == user.id)
@@ -346,7 +372,7 @@ class Mutation:
                 new_follow = Follow(
                     follower_id=follower.id,
                     followed_id=target.id,
-                    created_at=datetime.utcnow().isoformat(),
+                    created_at=datetime.now(timezone.utc).isoformat(),
                 )
                 session.add(new_follow)
                 await session.commit()
@@ -385,6 +411,8 @@ class Mutation:
         user = await get_current_user(info)
         if not user:
             raise Exception("Not authenticated")
+        _validate_length(bio, MAX_BIO_LENGTH, "Bio")
+        _validate_length(avatar, MAX_AVATAR_LENGTH, "Avatar")
 
         # 2. Update DB
         async for session in get_session():
@@ -412,19 +440,10 @@ class Mutation:
 @strawberry.type
 class Query:
     @strawberry.field
-    async def posts(
-        self, viewer: Optional[str] = None, filter_type: str = "GLOBAL"
-    ) -> List[PostType]:
+    async def posts(self, info: Info, filter_type: str = "GLOBAL") -> List[PostType]:
+        current_user = await get_current_user(info)
         async for session in get_session():
-            viewer_id = None
-            if viewer:
-                u = (
-                    (await session.execute(select(User).where(User.username == viewer)))
-                    .scalars()
-                    .first()
-                )
-                if u:
-                    viewer_id = u.id
+            viewer_id = current_user.id if current_user else None
 
             query = select(Post).order_by(Post.id.desc())
 
@@ -494,24 +513,15 @@ class Query:
             return response_posts
 
     @strawberry.field
-    async def profile(
-        self, username: str, viewer: Optional[str] = None
-    ) -> Optional[UserProfileType]:
+    async def profile(self, info: Info, username: str) -> Optional[UserProfileType]:
+        current_user = await get_current_user(info)
         async for session in get_session():
             q_user = select(User).where(User.username == username)
             user = (await session.execute(q_user)).scalars().first()
             if not user:
                 return None
 
-            viewer_id = None
-            if viewer:
-                v_u = (
-                    (await session.execute(select(User).where(User.username == viewer)))
-                    .scalars()
-                    .first()
-                )
-                if v_u:
-                    viewer_id = v_u.id
+            viewer_id = current_user.id if current_user else None
 
             q_followers = select(func.count(Follow.id)).where(
                 Follow.followed_id == user.id
@@ -556,7 +566,7 @@ class Query:
                 email=user.email,
                 avatar=user.avatar,
                 bio=user.bio,
-                created_at=user.created_at or datetime.utcnow().isoformat(),
+                created_at=user.created_at or datetime.now(timezone.utc).isoformat(),
                 posts_count=len(formatted_posts),
                 followers_count=followers_count,
                 following_count=following_count,
@@ -565,22 +575,14 @@ class Query:
             )
 
     @strawberry.field
-    async def search(self, query: str, viewer: Optional[str] = None) -> SearchResults:
+    async def search(self, info: Info, query: str) -> SearchResults:
+        current_user = await get_current_user(info)
         async for session in get_session():
             if not query or len(query.strip()) < 2:
                 return SearchResults(users=[], posts=[])
 
             clean_query = f"%{query}%"
-
-            viewer_id = None
-            if viewer:
-                v = (
-                    (await session.execute(select(User).where(User.username == viewer)))
-                    .scalars()
-                    .first()
-                )
-                if v:
-                    viewer_id = v.id
+            viewer_id = current_user.id if current_user else None
 
             # USERS SEARCH - Modified to load followers for the 'is_following' check
             u_query = (
@@ -655,4 +657,9 @@ class Subscription:
                 )
 
 
-schema = strawberry.Schema(query=Query, mutation=Mutation, subscription=Subscription)
+schema = strawberry.Schema(
+    query=Query,
+    mutation=Mutation,
+    subscription=Subscription,
+    extensions=[QueryDepthLimiter(max_depth=12)],
+)
