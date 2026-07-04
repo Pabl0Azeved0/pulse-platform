@@ -25,13 +25,22 @@ from rate_limit import (
     LOGIN_LIMIT,
     REGISTER_LIMIT,
 )
-from strawberry.extensions import QueryDepthLimiter, AddValidationRules
+from strawberry.extensions import (
+    QueryDepthLimiter,
+    AddValidationRules,
+    MaxAliasesLimiter,
+)
 from graphql.validation import NoSchemaIntrospectionCustomRule
 
 # --- INPUT LIMITS ---
 MAX_CONTENT_LENGTH = 5000
 MAX_BIO_LENGTH = 500
 MAX_AVATAR_LENGTH = 2048
+
+# Pagination and query-cost guards (mitigate alias/width amplification DoS)
+DEFAULT_PAGE_SIZE = 50
+MAX_PAGE_SIZE = 100
+MAX_ALIASES = 15
 
 
 def _validate_length(value, max_length: int, field: str):
@@ -465,10 +474,20 @@ class Mutation:
 @strawberry.type
 class Query:
     @strawberry.field
-    async def posts(self, info: Info, filter_type: str = "GLOBAL") -> List[PostType]:
+    async def posts(
+        self,
+        info: Info,
+        filter_type: str = "GLOBAL",
+        limit: int = DEFAULT_PAGE_SIZE,
+        offset: int = 0,
+    ) -> List[PostType]:
         current_user = await get_current_user(info)
         async for session in get_session():
             viewer_id = current_user.id if current_user else None
+
+            # Clamp pagination so one request can't pull the whole table.
+            limit = max(1, min(limit, MAX_PAGE_SIZE))
+            offset = max(0, offset)
 
             query = select(Post).order_by(Post.id.desc())
 
@@ -477,6 +496,8 @@ class Query:
                     Follow.follower_id == viewer_id
                 )
                 query = query.where(Post.user_id.in_(subquery))
+
+            query = query.limit(limit).offset(offset)
 
             posts_list = (await session.execute(query)).scalars().all()
 
@@ -681,7 +702,10 @@ class Subscription:
 
 
 def build_schema(production: bool = False) -> strawberry.Schema:
-    extensions = [QueryDepthLimiter(max_depth=12)]
+    extensions = [
+        QueryDepthLimiter(max_depth=12),
+        MaxAliasesLimiter(max_alias_count=MAX_ALIASES),
+    ]
     if production:
         # Disable schema introspection in production.
         extensions.append(AddValidationRules([NoSchemaIntrospectionCustomRule]))
