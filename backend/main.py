@@ -56,7 +56,8 @@ async def global_rate_limit(request: Request, call_next):
 
 
 # --- ROUTES ---
-graphql_app = GraphQLRouter(schema)
+IS_PRODUCTION = os.getenv("ENV", "development").lower() == "production"
+graphql_app = GraphQLRouter(schema, graphql_ide=None if IS_PRODUCTION else "graphiql")
 app.include_router(graphql_app, prefix="/graphql")
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
