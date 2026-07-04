@@ -42,8 +42,10 @@ export default function EditProfileModal({
     formData.append('file', file);
 
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(UPLOAD_URL, {
         method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
       const data = await res.json();
