@@ -39,8 +39,8 @@ interface SubscriptionData {
 
 // --- GraphQL Definitions ---
 const GET_POSTS = gql`
-  query GetPosts($viewer: String, $filter: String) {
-    posts(viewer: $viewer, filterType: $filter) {
+  query GetPosts($filter: String) {
+    posts(filterType: $filter) {
       id
       content
       likesCount
@@ -128,7 +128,7 @@ export default function Feed() {
   const [feedFilter, setFeedFilter] = useState<'GLOBAL' | 'FOLLOWING'>('GLOBAL');
 
   const { data, loading, error, subscribeToMore } = useQuery<PostsData>(GET_POSTS, {
-    variables: { viewer: user?.username, filter: feedFilter },
+    variables: { filter: feedFilter },
     fetchPolicy: 'network-only',
   });
 

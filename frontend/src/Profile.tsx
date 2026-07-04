@@ -5,8 +5,8 @@ import { useAuth } from './context/AuthContext';
 import EditProfileModal from './components/EditProfileModal';
 
 const GET_PROFILE = gql`
-  query GetProfile($username: String!, $viewer: String) {
-    profile(username: $username, viewer: $viewer) {
+  query GetProfile($username: String!) {
+    profile(username: $username) {
       username
       avatar
       bio
@@ -57,7 +57,7 @@ export default function Profile() {
   const { user } = useAuth();
 
   const { data, loading, error, refetch } = useQuery(GET_PROFILE, {
-    variables: { username, viewer: user?.username },
+    variables: { username },
     fetchPolicy: 'network-only', // Ensure we see updates after editing
   });
 

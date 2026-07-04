@@ -4,8 +4,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 
 const SEARCH_QUERY = gql`
-  query Search($query: String!, $viewer: String) {
-    search(query: $query, viewer: $viewer) {
+  query Search($query: String!) {
+    search(query: $query) {
       users {
         username
         avatar
@@ -49,7 +49,7 @@ export default function Search() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (term.trim()) {
-      executeSearch({ variables: { query: term, viewer: user?.username } });
+      executeSearch({ variables: { query: term } });
     }
   };
 
@@ -62,7 +62,7 @@ export default function Search() {
         await followUser({ variables: { target: targetUsername } });
       }
       // Re-run search to update UI state
-      executeSearch({ variables: { query: term, viewer: user.username } });
+      executeSearch({ variables: { query: term } });
     } catch (err) {
       console.error(err);
     }
