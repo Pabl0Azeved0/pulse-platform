@@ -15,6 +15,6 @@ dist/
 
 local/
 
-# Developer-only working docs (kept local, never shipped)
-ARCHITECTURE.md
-SECURITY_AUDIT.md
+# Allow commit only to README file, every other md file kept local
+*.md
+!README.md
