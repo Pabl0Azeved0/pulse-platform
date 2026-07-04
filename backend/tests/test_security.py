@@ -278,3 +278,29 @@ async def test_posts_pagination_limit(client):
     data = resp.json()
     assert "errors" not in data
     assert len(data["data"]["posts"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_nosniff_header_present(client):
+    # Hardening: every response carries X-Content-Type-Options: nosniff.
+    resp = await client.post("/graphql", json={"query": "query { __typename }"})
+    assert resp.headers.get("x-content-type-options") == "nosniff"
+
+
+@pytest.mark.asyncio
+async def test_password_max_length_enforced(client):
+    # Hardening: an overly long password is rejected (bounded bcrypt work).
+    resp = await client.post(
+        "/graphql",
+        json={
+            "query": REGISTER_MUTATION,
+            "variables": {
+                "username": "longpw",
+                "email": "longpw@example.com",
+                "password": "a" * 200,
+            },
+        },
+    )
+    data = resp.json()
+    assert "errors" in data
+    assert "between" in data["errors"][0]["message"]
