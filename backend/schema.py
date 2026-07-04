@@ -1,3 +1,4 @@
+import os
 import json
 import strawberry, jwt
 from jose import jwt, JWTError
@@ -15,6 +16,7 @@ from auth import (
     create_access_token,
     ALGORITHM,
     SECRET_KEY,
+    DUMMY_PASSWORD_HASH,
 )
 from events import broadcaster
 from rate_limit import (
@@ -23,7 +25,8 @@ from rate_limit import (
     LOGIN_LIMIT,
     REGISTER_LIMIT,
 )
-from strawberry.extensions import QueryDepthLimiter
+from strawberry.extensions import QueryDepthLimiter, AddValidationRules
+from graphql.validation import NoSchemaIntrospectionCustomRule
 
 # --- INPUT LIMITS ---
 MAX_CONTENT_LENGTH = 5000
@@ -45,7 +48,6 @@ NEW_POSTS_CHANNEL = "posts"
 class UserType:
     id: int
     username: str
-    email: str
     avatar: str | None
     bio: str | None
     created_at: str
@@ -79,7 +81,6 @@ class PostType:
 class UserProfileType:
     id: int
     username: str
-    email: str
     avatar: str | None
     bio: str | None
     created_at: str
@@ -152,7 +153,6 @@ def format_user(user_db, viewer_id: Optional[int] = None) -> UserType:
     return UserType(
         id=user_db.id,
         username=user_db.username,
-        email=user_db.email,
         avatar=user_db.avatar,
         bio=user_db.bio,
         created_at=user_db.created_at or datetime.now(timezone.utc).isoformat(),
@@ -212,7 +212,12 @@ class Mutation:
         async for session in get_session():
             query = select(User).where(User.username == username)
             user = (await session.execute(query)).scalars().first()
-            if not user or not verify_password(password, user.password_hash):
+            if not user:
+                # Run a verify against a constant hash so response time does not
+                # reveal whether the username exists (timing user-enumeration).
+                verify_password(password, DUMMY_PASSWORD_HASH)
+                raise Exception("Invalid credentials")
+            if not verify_password(password, user.password_hash):
                 raise Exception("Invalid credentials")
             token = create_access_token({"sub": user.username})
             return AuthPayload(access_token=token, user=format_user(user))
@@ -304,6 +309,26 @@ class Mutation:
         _validate_length(content, MAX_CONTENT_LENGTH, "Comment content")
 
         async for session in get_session():
+            post = (
+                (await session.execute(select(Post).where(Post.id == post_id)))
+                .scalars()
+                .first()
+            )
+            if not post:
+                raise Exception("Post not found")
+            if parent_id is not None:
+                parent = (
+                    (
+                        await session.execute(
+                            select(Comment).where(Comment.id == parent_id)
+                        )
+                    )
+                    .scalars()
+                    .first()
+                )
+                if not parent or parent.post_id != post_id:
+                    raise Exception("Invalid parent comment")
+
             new_comment = Comment(
                 content=content,
                 user_id=user.id,
@@ -563,7 +588,6 @@ class Query:
             return UserProfileType(
                 id=user.id,
                 username=user.username,
-                email=user.email,
                 avatar=user.avatar,
                 bio=user.bio,
                 created_at=user.created_at or datetime.now(timezone.utc).isoformat(),
@@ -639,7 +663,6 @@ class Subscription:
                 author = UserType(
                     id=0,
                     username=data["author_username"],
-                    email="",
                     avatar=data.get("author_avatar"),
                     bio=None,
                     created_at="",
@@ -657,9 +680,18 @@ class Subscription:
                 )
 
 
-schema = strawberry.Schema(
-    query=Query,
-    mutation=Mutation,
-    subscription=Subscription,
-    extensions=[QueryDepthLimiter(max_depth=12)],
-)
+def build_schema(production: bool = False) -> strawberry.Schema:
+    extensions = [QueryDepthLimiter(max_depth=12)]
+    if production:
+        # Disable schema introspection in production.
+        extensions.append(AddValidationRules([NoSchemaIntrospectionCustomRule]))
+    return strawberry.Schema(
+        query=Query,
+        mutation=Mutation,
+        subscription=Subscription,
+        extensions=extensions,
+    )
+
+
+IS_PRODUCTION = os.getenv("ENV", "development").lower() == "production"
+schema = build_schema(production=IS_PRODUCTION)

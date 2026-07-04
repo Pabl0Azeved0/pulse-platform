@@ -5,7 +5,6 @@ REGISTER_MUTATION = """
     mutation Register($username: String!, $email: String!, $password: String!) {
         register(username: $username, email: $email, password: $password) {
             username
-            email
         }
     }
 """
