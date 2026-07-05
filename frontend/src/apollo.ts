@@ -20,5 +20,18 @@ const authLink = setContext((_, { headers }) => {
 
 export const client = new ApolloClient({
   link: authLink.concat(httpLink),
-  cache: new InMemoryCache(),
+  cache: new InMemoryCache({
+    typePolicies: {
+      PostType: {
+        fields: {
+          comments: { merge: false },
+        },
+      },
+      CommentType: {
+        fields: {
+          replies: { merge: false },
+        },
+      },
+    },
+  }),
 });

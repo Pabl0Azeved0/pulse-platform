@@ -9,6 +9,7 @@ const CREATE_COMMENT = gql`
       content
       likesCount
       isLiked
+      createdAt
       author {
         username
         avatar
@@ -41,6 +42,7 @@ export default function CommentForm({ postId, parentId, onSuccess, onCancel }: C
             content: content,
             likesCount: 0,
             isLiked: false,
+            createdAt: new Date().toISOString(),
             author: {
               __typename: 'UserType',
               username: user.username,
@@ -75,6 +77,7 @@ export default function CommentForm({ postId, parentId, onSuccess, onCancel }: C
                       content
                       likesCount
                       isLiked
+                      createdAt
                       author {
                         username
                         avatar
@@ -110,6 +113,7 @@ export default function CommentForm({ postId, parentId, onSuccess, onCancel }: C
                       content
                       likesCount
                       isLiked
+                      createdAt
                       author {
                         username
                         avatar
@@ -161,26 +165,25 @@ export default function CommentForm({ postId, parentId, onSuccess, onCancel }: C
         value={content}
         onKeyDown={handleKeyDown}
         onChange={(e) => setContent(e.target.value)}
-        className="w-full bg-black/30 border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-pulse-blue outline-none resize-none transition-all placeholder-gray-500"
+        className="input text-sm resize-none"
         placeholder={parentId ? 'Write a reply...' : 'Write a comment...'}
         rows={2}
       />
       <div className="flex justify-end gap-2">
         {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="text-xs text-gray-500 hover:text-white px-3 py-1 transition-colors"
-          >
+          <button type="button" onClick={onCancel} className="btn-ghost text-xs px-3 py-1.5">
             Cancel
           </button>
         )}
         <button
           type="submit"
           disabled={!content.trim() || loading}
-          className="bg-pulse-blue text-black text-xs font-bold px-4 py-1.5 rounded hover:opacity-90 disabled:opacity-50 transition-all"
+          className="btn-primary text-xs px-4 py-1.5"
         >
-          {loading ? 'Sending...' : 'Send'}
+          {loading && (
+            <span className="w-3 h-3 border-2 border-accent-ink/40 border-t-accent-ink rounded-full animate-spin" />
+          )}
+          {loading ? 'Sending…' : 'Send'}
         </button>
       </div>
     </form>
