@@ -2,6 +2,97 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-pulse-black text-white;
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+  }
+
+  ::selection {
+    @apply bg-accent/25 text-white;
+  }
+
+  /* Consistent, visible focus for keyboard users */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent/70 ring-offset-2 ring-offset-bg;
+  }
+
+  /* Subtle scrollbar that matches the surface */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.2);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(148, 163, 184, 0.35);
+  }
+}
+
+@layer components {
+  /* Card surface */
+  .card {
+    @apply bg-surface border border-line rounded-2xl shadow-card;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full font-semibold
+           transition-colors duration-200 disabled:opacity-50 disabled:pointer-events-none
+           select-none cursor-pointer;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-accent-ink hover:bg-accent-hover px-5 py-2.5;
+  }
+  .btn-secondary {
+    @apply btn bg-white/[0.06] text-ink border border-line hover:bg-white/[0.1] px-5 py-2.5;
+  }
+  .btn-ghost {
+    @apply btn text-ink-muted hover:text-ink hover:bg-white/5 px-4 py-2;
+  }
+
+  /* Text input */
+  .input {
+    @apply w-full bg-surface-input border border-line rounded-xl px-4 py-3 text-ink
+           placeholder:text-ink-subtle outline-none transition-colors duration-200
+           focus:border-accent/60 focus:ring-2 focus:ring-accent/20;
+  }
+
+  /* Field label */
+  .label {
+    @apply block text-sm font-medium text-ink-muted mb-1.5;
+  }
+
+  /* Pill / tag */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full bg-white/5 border border-line
+           px-2.5 py-1 text-xs font-medium text-ink-muted;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

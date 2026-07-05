@@ -4,7 +4,7 @@ export default function PulseWave() {
       {[...Array(5)].map((_, i) => (
         <div
           key={i}
-          className="w-3 bg-gradient-to-t from-pulse-blue to-pulse-green rounded-full animate-pulse"
+          className="w-3 bg-accent rounded-full animate-pulse"
           style={{
             height: '100%',
             animationDuration: `${0.8 + i * 0.2}s`,

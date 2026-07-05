@@ -10,7 +10,6 @@ export default function Navbar() {
 
   const getInitials = (name: string) => name.substring(0, 2).toUpperCase();
 
-  // Close menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -24,32 +23,44 @@ export default function Navbar() {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <nav className="fixed top-0 w-full z-50 bg-black/80 backdrop-blur-md border-b border-white/10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <nav className="fixed top-0 w-full z-50 bg-bg/80 backdrop-blur-xl border-b border-line">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* LEFT: Logo */}
-          <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-gradient-to-tr from-pulse-blue to-pulse-green rounded-full animate-pulse group-hover:scale-110 transition-transform" />
-            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 tracking-tighter">
-              PULSE
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-2.5 group" aria-label="Pulse home">
+            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent/[0.12] border border-accent/25 text-accent transition-colors group-hover:bg-accent/20">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M2 12h4l2-5 3 10 2.5-6 1.5 3H22"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </span>
+            <span className="text-lg font-bold tracking-tight text-ink">Pulse</span>
           </Link>
 
-          {/* CENTER: Desktop Navigation (New addition) */}
+          {/* Center nav */}
           {user && (
-            <div className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
+            <div className="hidden md:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
               <Link
                 to="/"
-                className={`text-sm font-bold transition-colors ${
-                  isActive('/') ? 'text-white' : 'text-gray-400 hover:text-white'
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  isActive('/')
+                    ? 'text-ink bg-white/5'
+                    : 'text-ink-muted hover:text-ink hover:bg-white/5'
                 }`}
               >
                 Feed
               </Link>
               <Link
                 to="/search"
-                className={`text-sm font-bold transition-colors ${
-                  isActive('/search') ? 'text-white' : 'text-gray-400 hover:text-white'
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  isActive('/search')
+                    ? 'text-ink bg-white/5'
+                    : 'text-ink-muted hover:text-ink hover:bg-white/5'
                 }`}
               >
                 Explore
@@ -57,24 +68,25 @@ export default function Navbar() {
             </div>
           )}
 
-          {/* RIGHT SIDE: Icons & Dropdown */}
-          <div className="flex items-center gap-6">
+          {/* Right side */}
+          <div className="flex items-center gap-2">
             {user ? (
-              // --- LOGGED IN STATE ---
               <>
-                {/* Search Icon (Visible on Mobile/Tablet or as quick access) */}
                 <Link
                   to="/search"
-                  className={`transition-colors p-2 rounded-full hover:bg-white/5 ${
-                    isActive('/search') ? 'text-pulse-blue' : 'text-gray-400 hover:text-white'
+                  aria-label="Search"
+                  className={`p-2 rounded-lg transition-colors ${
+                    isActive('/search')
+                      ? 'text-accent bg-white/5'
+                      : 'text-ink-muted hover:text-ink hover:bg-white/5'
                   }`}
                 >
                   <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-6 w-6"
+                    className="h-5 w-5"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
+                    aria-hidden="true"
                   >
                     <path
                       strokeLinecap="round"
@@ -85,40 +97,42 @@ export default function Navbar() {
                   </svg>
                 </Link>
 
-                {/* User Dropdown */}
                 <div className="relative" ref={menuRef}>
                   <button
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className="flex items-center gap-3 focus:outline-none group"
+                    className="flex items-center gap-2.5 rounded-full pl-2.5 pr-1 py-1 hover:bg-white/5 transition-colors group"
+                    aria-haspopup="menu"
+                    aria-expanded={isMenuOpen}
                   >
-                    <span className="hidden md:block text-sm font-bold text-gray-300 group-hover:text-white transition-colors">
+                    <span className="hidden md:block text-sm font-medium text-ink-muted group-hover:text-ink transition-colors">
                       {user.username}
                     </span>
-
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-800 to-black flex items-center justify-center text-white font-bold border border-white/20 group-hover:border-pulse-blue transition-all overflow-hidden">
+                    <div className="w-8 h-8 rounded-full bg-surface-hover flex items-center justify-center text-xs font-semibold text-ink border border-line group-hover:border-accent/50 transition-colors overflow-hidden">
                       {user.avatar ? (
-                        <img src={user.avatar} alt="User" className="w-full h-full object-cover" />
+                        <img src={user.avatar} alt="" className="w-full h-full object-cover" />
                       ) : (
                         getInitials(user.username)
                       )}
                     </div>
                   </button>
 
-                  {/* Dropdown Menu */}
                   {isMenuOpen && (
-                    <div className="absolute right-0 mt-3 w-48 bg-gray-900 rounded-xl shadow-2xl py-2 border border-white/10 ring-1 ring-black ring-opacity-5 animate-fade-in origin-top-right">
-                      {/* My Profile Link */}
+                    <div
+                      role="menu"
+                      className="absolute right-0 mt-2 w-52 card shadow-pop py-1.5 animate-fade-up origin-top-right"
+                    >
                       <Link
                         to={`/u/${user.username}`}
                         onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                        role="menuitem"
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink-muted hover:bg-white/5 hover:text-ink transition-colors"
                       >
                         <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
+                          className="h-4 w-4"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
+                          aria-hidden="true"
                         >
                           <path
                             strokeLinecap="round"
@@ -127,22 +141,48 @@ export default function Navbar() {
                             d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                           />
                         </svg>
-                        My Profile
+                        Profile
                       </Link>
-
-                      <div className="h-px bg-white/10 my-1 mx-2" />
-
-                      {/* Logout */}
-                      <button
-                        onClick={logout}
-                        className="w-full flex items-center gap-2 text-left px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+                      <Link
+                        to="/settings"
+                        onClick={() => setIsMenuOpen(false)}
+                        role="menuitem"
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink-muted hover:bg-white/5 hover:text-ink transition-colors"
                       >
                         <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-5 w-5"
+                          className="h-4 w-4"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                        Settings
+                      </Link>
+                      <div className="h-px bg-line my-1.5 mx-2" />
+                      <button
+                        onClick={logout}
+                        role="menuitem"
+                        className="w-full flex items-center gap-2.5 text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+                      >
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          aria-hidden="true"
                         >
                           <path
                             strokeLinecap="round"
@@ -158,19 +198,12 @@ export default function Navbar() {
                 </div>
               </>
             ) : (
-              // --- LOGGED OUT STATE ---
               <>
-                <Link
-                  to="/login"
-                  className="text-gray-300 hover:text-white transition-colors text-sm font-bold tracking-wide"
-                >
-                  LOG IN
+                <Link to="/login" className="btn-ghost text-sm">
+                  Log in
                 </Link>
-                <Link
-                  to="/register"
-                  className="bg-gradient-to-r from-pulse-blue to-pulse-green text-black font-bold py-2 px-6 rounded-full text-sm hover:opacity-90 hover:shadow-[0_0_15px_rgba(56,189,248,0.3)] transition-all"
-                >
-                  JOIN
+                <Link to="/register" className="btn-primary text-sm">
+                  Join Pulse
                 </Link>
               </>
             )}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, gql } from '@apollo/client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 
 const LOGIN_MUTATION = gql`
@@ -22,11 +22,8 @@ export default function Login() {
     e.preventDefault();
     try {
       const response = await loginMutation({ variables: { username, password } });
-
       if (response.data?.login?.accessToken) {
-        const token = response.data.login.accessToken;
-        login(token, username);
-
+        login(response.data.login.accessToken, username);
         navigate('/');
       }
     } catch (err) {
@@ -35,49 +32,97 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center pt-16">
-      <div className="w-full max-w-md bg-pulse-dark p-8 rounded-2xl shadow-2xl border border-white/5">
-        <h2 className="text-3xl font-bold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r from-pulse-blue to-pulse-green">
-          Welcome Back
-        </h2>
+    <div className="flex min-h-screen items-center justify-center px-4 pt-16">
+      <div className="w-full max-w-md">
+        <div className="mb-8 text-center">
+          <span className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-accent/[0.12] border border-accent/25 text-accent mb-5">
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M2 12h4l2-5 3 10 2.5-6 1.5 3H22"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">Welcome back</h1>
+          <p className="mt-2 text-sm text-ink-muted">Sign in to pick up where you left off.</p>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">Username</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-pulse-blue focus:ring-1 focus:ring-pulse-blue transition-colors"
-              placeholder="Enter your username"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-pulse-green focus:ring-1 focus:ring-pulse-green transition-colors"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-pulse-blue to-pulse-green text-black font-bold py-3 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {loading ? 'Processing...' : 'Sign In'}
-          </button>
-
-          {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-sm text-center">
-              {error.message}
+        <div className="card p-6 sm:p-8">
+          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+            <div>
+              <label htmlFor="username" className="label">
+                Username
+              </label>
+              <input
+                id="username"
+                type="text"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="input"
+                placeholder="yourname"
+              />
             </div>
-          )}
-        </form>
+
+            <div>
+              <label htmlFor="password" className="label">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input"
+                placeholder="••••••••"
+              />
+            </div>
+
+            {error && (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/25 px-3.5 py-3 text-sm text-red-300"
+              >
+                <svg
+                  className="w-4 h-4 mt-0.5 shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z"
+                  />
+                </svg>
+                <span>{error.message}</span>
+              </div>
+            )}
+
+            <button type="submit" disabled={loading} className="btn-primary w-full py-3">
+              {loading && (
+                <span className="w-4 h-4 border-2 border-accent-ink/40 border-t-accent-ink rounded-full animate-spin" />
+              )}
+              {loading ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+        </div>
+
+        <p className="mt-6 text-center text-sm text-ink-muted">
+          New to Pulse?{' '}
+          <Link
+            to="/register"
+            className="font-medium text-accent hover:text-accent-hover transition-colors"
+          >
+            Create an account
+          </Link>
+        </p>
       </div>
     </div>
   );
