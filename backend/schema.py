@@ -5,7 +5,7 @@ from jose import jwt, JWTError
 from typing import List, Optional, AsyncGenerator
 from datetime import datetime, timezone
 from sqlalchemy.future import select
-from sqlalchemy import func
+from sqlalchemy import func, delete
 from sqlalchemy.orm import selectinload
 from strawberry.types import Info
 
@@ -66,6 +66,7 @@ class PostType:
     likes_count: int
     is_liked: bool
     comments: List[CommentType]
+    created_at: Optional[str] = None
 
 
 @strawberry.type
@@ -165,6 +166,27 @@ def format_comment_node(comment_db) -> CommentType:
     )
 
 
+def build_comment_tree(all_comments) -> List[CommentType]:
+    """Nest a flat list of comments into a reply tree so the feed returns
+    top-level comments with their nested replies (not just parents)."""
+    children: dict = {}
+    for c in all_comments:
+        children.setdefault(c.parent_id, []).append(c)
+
+    def build(comment) -> CommentType:
+        return CommentType(
+            id=comment.id,
+            content=comment.content,
+            created_at=comment.created_at or datetime.now(timezone.utc).isoformat(),
+            author=format_user(comment.author),
+            replies=[build(child) for child in children.get(comment.id, [])],
+            likes_count=0,
+            is_liked=False,
+        )
+
+    return [build(c) for c in children.get(None, [])]
+
+
 @strawberry.type
 class Mutation:
     @strawberry.mutation
@@ -238,6 +260,7 @@ class Mutation:
                 is_liked=False,
                 author=format_user(user),
                 comments=[],
+                created_at=new_post.created_at,
             )
             # Publish a serializable payload (Redis carries strings, not objects).
             await broadcaster.publish(
@@ -248,6 +271,7 @@ class Mutation:
                         "content": new_post.content,
                         "author_username": user.username,
                         "author_avatar": user.avatar,
+                        "created_at": new_post.created_at,
                     }
                 ),
             )
@@ -457,6 +481,83 @@ class Mutation:
 
             return format_user(db_user)
 
+    @strawberry.mutation
+    async def edit_comment(
+        self, info: Info, comment_id: int, content: str
+    ) -> CommentType:
+        user = await get_current_user(info)
+        if not user:
+            raise Exception("Not authenticated")
+        _validate_length(content, Schema.MAX_CONTENT_LENGTH, "Comment content")
+
+        async for session in get_session():
+            comment = (
+                (
+                    await session.execute(
+                        select(Comment)
+                        .where(Comment.id == comment_id)
+                        .options(selectinload(Comment.author))
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            if not comment:
+                raise Exception("Comment not found")
+            if comment.user_id != user.id:
+                raise Exception("You can only edit your own comments")
+            comment.content = content
+            await session.commit()
+            return format_comment_node(comment)
+
+    @strawberry.mutation
+    async def delete_comment(self, info: Info, comment_id: int) -> bool:
+        user = await get_current_user(info)
+        if not user:
+            raise Exception("Not authenticated")
+
+        async for session in get_session():
+            comment = (
+                (await session.execute(select(Comment).where(Comment.id == comment_id)))
+                .scalars()
+                .first()
+            )
+            if not comment:
+                raise Exception("Comment not found")
+
+            post = (
+                (await session.execute(select(Post).where(Post.id == comment.post_id)))
+                .scalars()
+                .first()
+            )
+            # Comment author OR the post's author may delete it
+            if comment.user_id != user.id and (not post or post.user_id != user.id):
+                raise Exception("You can't delete this comment")
+
+            # Collect the comment plus all descendant replies
+            to_delete = [comment_id]
+            frontier = [comment_id]
+            while frontier:
+                child_ids = (
+                    (
+                        await session.execute(
+                            select(Comment.id).where(Comment.parent_id.in_(frontier))
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                if not child_ids:
+                    break
+                to_delete.extend(child_ids)
+                frontier = child_ids
+
+            # Remove likes on those comments first (FK), then the comments
+            await session.execute(delete(Like).where(Like.comment_id.in_(to_delete)))
+            await session.execute(delete(Comment).where(Comment.id.in_(to_delete)))
+            await session.commit()
+            return True
+
 
 @strawberry.type
 class Query:
@@ -526,12 +627,7 @@ class Query:
                 )
                 all_comments_db = (await session.execute(c_query)).scalars().all()
 
-                # Basic Comment stitching logic (simplified from your snippet)
-                formatted_comments = [
-                    format_comment_node(c)
-                    for c in all_comments_db
-                    if c.parent_id is None
-                ]
+                formatted_comments = build_comment_tree(all_comments_db)
 
                 response_posts.append(
                     PostType(
@@ -541,6 +637,7 @@ class Query:
                         is_liked=user_liked,
                         author=format_user(author, viewer_id),
                         comments=formatted_comments,
+                        created_at=p.created_at,
                     )
                 )
             return response_posts
@@ -590,6 +687,7 @@ class Query:
                         is_liked=False,
                         author=format_user(user),  # No viewer needed for author
                         comments=[],
+                        created_at=p.created_at,
                     )
                 )
 
@@ -687,6 +785,7 @@ class Subscription:
                     is_liked=False,
                     author=author,
                     comments=[],
+                    created_at=data.get("created_at"),
                 )
 
 

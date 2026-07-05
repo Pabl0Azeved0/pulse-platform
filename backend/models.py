@@ -50,6 +50,7 @@ class Post(Base):
     id = Column(Integer, primary_key=True, index=True)
     content = Column(String)
     user_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(String, default=lambda: datetime.now(timezone.utc).isoformat())
 
     # Relationship to User
     author = relationship("User", back_populates="posts")

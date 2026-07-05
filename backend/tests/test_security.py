@@ -261,6 +261,44 @@ async def test_alias_amplification_blocked(client):
 
 
 @pytest.mark.asyncio
+async def test_feed_returns_nested_replies(client):
+    # Regression: replying to a comment must survive a feed refetch (the feed
+    # resolver has to nest replies, not drop them).
+    token = await _register_and_login(client, "threader")
+    headers = {"Authorization": f"Bearer {token}"}
+    with patch("schema.broadcaster.publish", new=AsyncMock()):
+        r = await client.post(
+            "/graphql",
+            json={"query": CREATE_POST_MUTATION, "variables": {"content": "root"}},
+            headers=headers,
+        )
+    post_id = r.json()["data"]["createPost"]["id"]
+
+    cc = "mutation($pid:Int!,$c:String!,$parent:Int){createComment(postId:$pid,content:$c,parentId:$parent){id}}"
+    rc = await client.post(
+        "/graphql",
+        json={"query": cc, "variables": {"pid": post_id, "c": "top", "parent": None}},
+        headers=headers,
+    )
+    parent_id = rc.json()["data"]["createComment"]["id"]
+    await client.post(
+        "/graphql",
+        json={
+            "query": cc,
+            "variables": {"pid": post_id, "c": "nested reply", "parent": parent_id},
+        },
+        headers=headers,
+    )
+
+    q = "query { posts { id comments { id content replies { id content } } } }"
+    resp = await client.post("/graphql", json={"query": q})
+    posts = resp.json()["data"]["posts"]
+    post = next(p for p in posts if p["id"] == post_id)
+    top = next(c for c in post["comments"] if c["id"] == parent_id)
+    assert any(rep["content"] == "nested reply" for rep in top["replies"])
+
+
+@pytest.mark.asyncio
 async def test_posts_pagination_limit(client):
     # Finding B: the feed is bounded — limit caps the rows returned.
     token = await _register_and_login(client, "pager")
@@ -306,3 +344,92 @@ async def test_password_max_length_enforced(client):
     data = resp.json()
     assert "errors" in data
     assert "between" in data["errors"][0]["message"]
+
+
+@pytest.mark.asyncio
+async def test_post_has_created_at(client):
+    token = await _register_and_login(client, "stamped")
+    with patch("schema.broadcaster.publish", new=AsyncMock()):
+        await client.post(
+            "/graphql",
+            json={"query": CREATE_POST_MUTATION, "variables": {"content": "hi"}},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    resp = await client.post(
+        "/graphql", json={"query": "query { posts { id createdAt } }"}
+    )
+    posts = resp.json()["data"]["posts"]
+    assert posts and posts[0]["createdAt"]
+
+
+async def _make_post_and_comment(client, username):
+    token = await _register_and_login(client, username)
+    headers = {"Authorization": f"Bearer {token}"}
+    with patch("schema.broadcaster.publish", new=AsyncMock()):
+        r = await client.post(
+            "/graphql",
+            json={"query": CREATE_POST_MUTATION, "variables": {"content": "p"}},
+            headers=headers,
+        )
+    pid = r.json()["data"]["createPost"]["id"]
+    cc = "mutation($pid:Int!,$c:String!){createComment(postId:$pid,content:$c){id}}"
+    rc = await client.post(
+        "/graphql",
+        json={"query": cc, "variables": {"pid": pid, "c": "orig"}},
+        headers=headers,
+    )
+    return headers, rc.json()["data"]["createComment"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_edit_own_comment(client):
+    headers, cid = await _make_post_and_comment(client, "editor")
+    m = "mutation($id:Int!,$c:String!){editComment(commentId:$id,content:$c){id content}}"
+    resp = await client.post(
+        "/graphql",
+        json={"query": m, "variables": {"id": cid, "c": "edited"}},
+        headers=headers,
+    )
+    assert resp.json()["data"]["editComment"]["content"] == "edited"
+
+
+@pytest.mark.asyncio
+async def test_cannot_edit_others_comment(client):
+    _, cid = await _make_post_and_comment(client, "owner")
+    other = await _register_and_login(client, "intruder")
+    m = "mutation($id:Int!,$c:String!){editComment(commentId:$id,content:$c){id}}"
+    resp = await client.post(
+        "/graphql",
+        json={"query": m, "variables": {"id": cid, "c": "hacked"}},
+        headers={"Authorization": f"Bearer {other}"},
+    )
+    assert "errors" in resp.json()
+
+
+@pytest.mark.asyncio
+async def test_delete_own_comment(client):
+    headers, cid = await _make_post_and_comment(client, "remover")
+    m = "mutation($id:Int!){deleteComment(commentId:$id)}"
+    resp = await client.post(
+        "/graphql", json={"query": m, "variables": {"id": cid}}, headers=headers
+    )
+    assert resp.json()["data"]["deleteComment"] is True
+    # gone from the feed
+    feed = await client.post(
+        "/graphql", json={"query": "query { posts { comments { id } } }"}
+    )
+    ids = [c["id"] for p in feed.json()["data"]["posts"] for c in p["comments"]]
+    assert cid not in ids
+
+
+@pytest.mark.asyncio
+async def test_cannot_delete_others_comment(client):
+    _, cid = await _make_post_and_comment(client, "victim")
+    other = await _register_and_login(client, "attacker")
+    m = "mutation($id:Int!){deleteComment(commentId:$id)}"
+    resp = await client.post(
+        "/graphql",
+        json={"query": m, "variables": {"id": cid}},
+        headers={"Authorization": f"Bearer {other}"},
+    )
+    assert "errors" in resp.json()
